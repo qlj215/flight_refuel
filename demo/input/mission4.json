@@ -1,0 +1,127 @@
+[
+  {
+    "mission_id": "RF-01",
+    "creation_time": "2025-04-06 12:00:00",
+    "units": {
+      "tanker_id": "TK001",
+      "receiver_id": "RE001 RE002"
+    },
+    "refuel_mode": {
+      "mode_type": 1,
+      "timing_params": {
+        "sub_mode": "dingdian",
+        "designated_time": "14:30:00",
+        "safe_zone": {
+          "is_defined": true,
+          "zones": [
+            {
+              "safezone_id": 1,
+              "vertices": [
+                [
+                  29.0, 
+                  119.5
+                ],
+                [
+                  29.0, 
+                  121.4
+                ],
+                [
+                  29.8, 
+                  121.4
+                ],
+                [
+                  29.8, 
+                  119.5
+                ]
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "optimization_prefs": {
+      "primary_pref": 4,
+      "secondary_pref": 2,
+      "weight_factors": [
+        0.5,
+        0.5,
+        0.0
+      ]
+    },
+    "racecourse": {
+      "turn_direction": "nishizhen",
+      "orbit_radius": 5000,
+      "entry_angle": 30
+    },
+    "holding_zone": {
+      "entry_rules": {
+        "speed_limit": 200,
+        "altitude_range": [
+          5000,
+          10000
+        ]
+      },
+      "stacking_rules": {
+        "stacking_interval": 2000,
+        "communication_freq": 121.5
+      },
+      "exit_rules": {
+        "distance_to_rendezvous": 2000,
+        "exit_speed": 200,
+        "climb_gradient": 0
+      }
+    },
+    "safe_corridors": [
+    ],
+    "operation_area": {
+      "boundary": [
+        [
+          25.5,
+          114.0
+        ],
+        [
+          25.5,
+          124.0
+        ],
+        [
+          35.5,
+          124.0
+        ],
+        [
+          35.5,
+          114.0
+        ]
+      ],
+      "altitude_limits": [
+        5000,
+        12000
+      ],
+      "no_fly_zones": {
+        "is_defined": true,
+        "zones": [
+          {
+            "noflyzone_id": 1,
+            "vertices": [
+              [
+                27.9, 
+                117.9
+              ],
+              [
+                27.9, 
+                118.3
+              ],
+              [
+                28.2, 
+                118.3
+              ],
+              [
+                28.2, 
+                117.9
+              ]
+            ]
+          }
+        ]
+      }
+    }
+  }
+]

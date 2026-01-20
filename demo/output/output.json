@@ -1,0 +1,53 @@
+{
+  "racetrack": {
+    "length": 0,
+    "radius": 5000,
+    "orientation_deg": 0,
+    "altitude_m": 7000,
+    "speed": 130
+  },
+  "tanker": {
+    "meeting_altitude_m": 5000,
+    "speed": 300,
+    "entry_point": [0.00, 0.00],
+    "entry_direction_deg": 0.00,
+    "arrival_time_s": 0.00,
+    "fuel_consumed": 0.00
+  },
+  "receivers": {
+    "RE001": {
+      "sequence": 1,
+      "meeting_altitude_m": 5000.00,
+      "speed": 300.00,
+      "coordinate": [0.00, 0.00],
+      "waiting_point": [0.00, 0.00],
+      "cycling_number": 0,
+      "arrival_time_s": 0.00,
+      "fuel_consumed": 0.00
+    },
+    "RE002": {
+      "sequence": 2,
+      "meeting_altitude_m": 5000.00,
+      "speed": 300.00,
+      "coordinate": [0.00, 0.00],
+      "waiting_point": [0.00, 0.00],
+      "cycling_number": 0,
+      "arrival_time_s": 0.00,
+      "fuel_consumed": 0.00
+    },
+    "RE003": {
+      "sequence": 3,
+      "meeting_altitude_m": 5000.00,
+      "speed": 300.00,
+      "coordinate": [0.00, 0.00],
+      "waiting_point": [0.00, 0.00],
+      "cycling_number": 0,
+      "arrival_time_s": 0.00,
+      "fuel_consumed": 0.00
+    }
+  },
+  "receiver_summary": {
+    "total_arrival_time_s": 0.00,
+    "total_fuel_consumed": 0.00
+  }
+}
