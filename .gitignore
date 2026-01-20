@@ -1,0 +1,28 @@
+# CMake build dirs
+build/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+
+# MinGW / MSVC outputs
+*.o
+*.obj
+*.exe
+*.dll
+*.a
+*.lib
+*.pdb
+*.ilk
+
+# VSCode
+.vscode/
+
+# logs / temp
+*.log
+*.tmp
+
+# OS
+.DS_Store
+Thumbs.db
