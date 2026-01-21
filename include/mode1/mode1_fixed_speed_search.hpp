@@ -1,24 +1,24 @@
 #pragma once
 /**
- * @file mode0_fixed_speed_search.hpp
+ * @file mode1_fixed_speed_search.hpp
  *
  * 这个头文件实现（接口 + 可运行的基础实现）：
- *   “加油机定速 + 受油机定速”（mode_type = 0）的白框流程。
+ *   “加油机定速 + 受油机定时”（mode_type = 1）的白框流程。
  *
- * 重要约定：白色方框 = 环节（接口边界），绿色框只是说明/提示，不作为环节边界。
+ * 与 mode0 的差异（对齐你最新流程图）：
+ *   - 不计算盘旋圈数（不需要 HoldingLoopCalculator 环节）
+ *   - 对于每个 (tanker_speed, entrypoint_choice) 组合：
+ *       直接解一个受油机“奔赴真速 vr”，使得受油机与加油机同时到达会合点。
+ *       vr 允许为非整数（double 小数）。
+ *   - 其余白框（速度离散、点位组合、会合高度反查、粗代价评估、全局选优）与 mode0 一致。
  *
  * 白框对应关系（与你最新图片一致）：
  *   [1] 离散遍历加油机的速度区间
  *   [2] 遍历受油机的点位选择（进入点位组合）
- *   [3] 计算会合所需会合速度，并判断是否在速度范围内（输出“可行候选集”，不在此处选最优）
- *   [4] 计算盘旋的圈数（把时间差 delta_t 转为 n_loops）
+ *   [3] 计算受油机需要的“奔赴真速 vr”，使其与加油机同时到达点位，并做速度范围检查
  *   [5] 会合速度 ->（高度，表速）组合：反向查表取高度变化最小的会合高度
- *   [6] 粗计算相应的油耗与时间，找到代价最小的方案（此处才“决定受油机真速/高度/表速”）
+ *   [6] 粗计算相应的油耗与时间，找到代价最小的方案（此处决定：受油机真速 vr / 会合高度 / 会合表速）
  *   [9] 根据寻优偏好，取油耗最优 / 时间最优
- *
- * 说明：
- * - 本文件提供的是“基础可运行版本”，用于把流程跑通并对齐流程图含义；
- * - 你后续可以逐步把各环节替换为更精确的工程实现，但不要改接口。
  */
 
 #include <string>
@@ -32,10 +32,10 @@
 
 #include "common/types.hpp"
 
-namespace refuel::mode0 {
+namespace refuel::mode1 {
 
 // ============================================================
-// 一些“最小依赖”的小工具函数
+// 最小依赖工具函数（与 mode0 保持同口径）
 // ============================================================
 
 /// 2D 欧氏距离（只看 x/y，忽略 z）
@@ -59,13 +59,11 @@ static inline std::vector<refuel::Vec3> GetEntryPointsFallback(const refuel::Pla
     return ctx.racetrack.entrypoints_xy;
   }
 
-  // 中心点：优先 racetrack.center_xy，其次 tanker 初始位置。
   refuel::Vec3 c = ctx.racetrack.center_xy;
   if (std::fabs(c.x) < 1e-9 && std::fabs(c.y) < 1e-9) {
     c = ctx.tanker.initial_position_xy;
   }
 
-  // 半径：优先 racetrack.radius_m，其次 mission 输入 orbit_radius。
   double r = ctx.racetrack.radius_m;
   if (r <= 1e-6) r = ctx.mission.racecourse.orbit_radius;
   if (r <= 1e-6) r = 5000.0;
@@ -79,18 +77,7 @@ static inline std::vector<refuel::Vec3> GetEntryPointsFallback(const refuel::Pla
   return eps;
 }
 
-/// 简易计算跑马场“一圈”长度（m）：未知直线段时退化为圆。
-static inline double RacetrackLoopLengthM(const refuel::PlanningContext& ctx) {
-  const double r = (ctx.racetrack.radius_m > 1e-6) ? ctx.racetrack.radius_m
-                                                   : (ctx.mission.racecourse.orbit_radius > 1e-6
-                                                          ? ctx.mission.racecourse.orbit_radius
-                                                          : 5000.0);
-  const double L = (ctx.racetrack.length_m > 1e-6) ? ctx.racetrack.length_m : 0.0;
-  constexpr double kPi = 3.14159265358979323846;
-  return 2.0 * L + 2.0 * kPi * r;
-}
-
-/// 最近邻索引
+/// 最近邻索引（2D）
 static inline int NearestIndex2D(const std::vector<refuel::Vec3>& pts, const refuel::Vec3& p) {
   if (pts.empty()) return -1;
   int best = 0;
@@ -103,80 +90,6 @@ static inline int NearestIndex2D(const std::vector<refuel::Vec3>& pts, const ref
     }
   }
   return best;
-}
-
-/// 在 cruise_perf 中：给定高度 alt，找“最接近 target_tas 的表速( speed_levels )”
-static inline bool FindBestIASAtAltByTAS(const refuel::CruisePerformanceTable& perf,
-                                        double alt_m,
-                                        double target_tas_mps,
-                                        double* out_ias_mps,
-                                        double* out_abs_err) {
-  if (!out_ias_mps || !out_abs_err) return false;
-  *out_ias_mps = 0.0;
-  *out_abs_err = std::numeric_limits<double>::infinity();
-
-  if (perf.altitude_levels.empty() || perf.speed_levels.empty() || perf.true_airspeed_data.empty()) return false;
-
-  // 1) 最近高度层
-  int alt_i = 0;
-  double best_da = std::numeric_limits<double>::infinity();
-  for (int i = 0; i < static_cast<int>(perf.altitude_levels.size()); ++i) {
-    const double da = std::fabs(perf.altitude_levels[i] - alt_m);
-    if (da < best_da) { best_da = da; alt_i = i; }
-  }
-  if (alt_i < 0 || alt_i >= static_cast<int>(perf.true_airspeed_data.size())) return false;
-
-  const auto& row = perf.true_airspeed_data[alt_i];
-  if (row.size() != perf.speed_levels.size()) return false;
-
-  // 2) 该高度层遍历表速，找 tas 误差最小
-  int best_j = 0;
-  double best_err = std::numeric_limits<double>::infinity();
-  for (int j = 0; j < static_cast<int>(row.size()); ++j) {
-    const double err = std::fabs(row[j] - target_tas_mps);
-    if (err < best_err) { best_err = err; best_j = j; }
-  }
-
-  *out_ias_mps = perf.speed_levels[best_j];
-  *out_abs_err = best_err;
-  return true;
-}
-
-/// 在 fuel_table 中按(alt, ias)取最近邻耗油率（返回“表中单位/秒”的数值；若表本身就是 /h，你可在此处做 /3600）
-static inline double LookupFuelRatePerSecondNearest(const refuel::FuelConsumptionTable& ft,
-                                                    const refuel::CruisePerformanceTable& perf,
-                                                    double alt_m,
-                                                    double ias_mps) {
-  // 说明：
-  // - 这里使用最近邻（不插值），以保持实现简单且稳定。
-  // - 返回值单位取决于你们表的单位；用于 argmin（最优选择）时，常数比例不影响结果。
-  if (ft.altitude_levels.empty() || ft.consumption_data.empty()) return 0.0;
-  if (perf.speed_levels.empty()) return 0.0;
-
-  // 最近高度
-  int alt_i = 0;
-  double best_da = std::numeric_limits<double>::infinity();
-  for (int i = 0; i < static_cast<int>(ft.altitude_levels.size()); ++i) {
-    const double da = std::fabs(ft.altitude_levels[i] - alt_m);
-    if (da < best_da) { best_da = da; alt_i = i; }
-  }
-  if (alt_i < 0 || alt_i >= static_cast<int>(ft.consumption_data.size())) return 0.0;
-
-  const auto& row = ft.consumption_data[alt_i];
-  if (row.size() != perf.speed_levels.size()) return 0.0;
-
-  // 最近表速索引（用 perf.speed_levels 对齐）
-  int best_j = 0;
-  double best_ds = std::numeric_limits<double>::infinity();
-  for (int j = 0; j < static_cast<int>(perf.speed_levels.size()); ++j) {
-    const double ds = std::fabs(perf.speed_levels[j] - ias_mps);
-    if (ds < best_ds) { best_ds = ds; best_j = j; }
-  }
-
-  // 这里默认 ft 表是“每小时”，做一个 /3600 的常见换算；
-  // 若你们表不是这个单位，只需改这一行即可。
-  const double per_hour = row[best_j];
-  return per_hour / 3600.0;
 }
 
 // ===========================
@@ -216,13 +129,15 @@ struct EntryPointCombos {
 struct MeetingCandidate {
   bool feasible = false;
 
-  double receiver_tas_mps = 0.0;   ///< 受油机“奔赴速度”（离散候选之一）
-  double meet_tas_mps = 0.0;       ///< 会合速度：基础实现按“加油机定速=会合速度”
+  double receiver_tas_mps = 0.0;   ///< 受油机“奔赴真速 vr”（解出来的小数）
+  double meet_tas_mps = 0.0;       ///< 会合速度：基础实现仍按“加油机定速=会合速度”
 
   double tanker_arrive_time_s = 0.0;
   double receiver_arrive_time_s = 0.0;
-  double delta_t_s = 0.0;          ///< receiver - tanker（<0 表示受油机更早到）
+  double delta_t_s = 0.0;          ///< receiver - tanker（mode1 里应接近 0）
 
+  // 为了与 mode0 的输出结构保持一致（便于 rendezvous_stage.cpp 按同一字段写回），
+  // 这里保留盘旋相关字段，但 mode1 中固定为 0 / 不启用。
   int    n_loops = 0;
   double receiver_arrive_time_adjusted_s = 0.0;
 
@@ -358,16 +273,15 @@ class FeasibleCandidateGenerator {
 public:
   virtual ~FeasibleCandidateGenerator() = default;
 
+  // mode1：不遍历离散 vr，而是直接解 vr，使得 t_receiver == t_tanker
   virtual std::vector<MeetingCandidate> Generate(
       const PlanningContext& ctx,
       double tanker_tas_mps,
-      const EntryPointCombo& combo,
-      const std::vector<double>& receiver_tas_candidates_mps) const
+      const EntryPointCombo& combo) const
   {
     std::vector<MeetingCandidate> out;
 
     if (combo.choices.empty()) return out;
-    if (receiver_tas_candidates_mps.empty()) return out;
 
     const std::string rid = combo.choices.front().receiver_id;
     const int ep_idx = combo.choices.front().entrypoint_idx;
@@ -383,10 +297,6 @@ public:
     if (ep_idx < 0 || static_cast<size_t>(ep_idx) >= entrypoints.size()) return out;
     const refuel::Vec3 meet_point = entrypoints[static_cast<size_t>(ep_idx)];
 
-    // tanker 到达时间（按图：两点直线）
-    const double tanker_dist_m = Dist2D(ctx.tanker.initial_position_xy, meet_point);
-    const double t_tanker_arrive = SafeDiv(tanker_dist_m, tanker_tas_mps, std::numeric_limits<double>::infinity());
-
     // tanker speed bounds 检查
     const double t_vmin = ctx.tanker_speed_bounds.min_speed_mps;
     const double t_vmax = ctx.tanker_speed_bounds.max_speed_mps;
@@ -394,93 +304,56 @@ public:
       return out;
     }
 
-    // receiver speed bounds 检查（奔赴速度候选）
+    // receiver speed bounds
     const auto itb = ctx.receiver_speed_bounds.find(rid);
     if (itb == ctx.receiver_speed_bounds.end()) return out;
     const double r_vmin = itb->second.min_speed_mps;
     const double r_vmax = itb->second.max_speed_mps;
 
-    // 关键：会合速度（基础实现按“加油机定速 = 会合速度”）
-    // 同时要求：受油机必须能在会合时匹配该会合速度（否则没有意义）
+    // 会合速度（基础实现按“加油机定速 = 会合速度”）
     const double meet_tas = tanker_tas_mps;
+    // 仍要求：受油机具备跟随/匹配会合速度的能力
     if (meet_tas < r_vmin - 1e-9 || meet_tas > r_vmax + 1e-9) {
-      // 受油机连会合速度都达不到/超不了，直接不可行
       return out;
     }
 
-    // receiver 到点距离
+    // 到点时间：两点直线
+    const double tanker_dist_m = Dist2D(ctx.tanker.initial_position_xy, meet_point);
+    const double t_tanker_arrive = SafeDiv(tanker_dist_m, tanker_tas_mps, std::numeric_limits<double>::infinity());
+    if (!std::isfinite(t_tanker_arrive) || t_tanker_arrive <= 1e-9) {
+      return out;
+    }
+
+    // 解受油机“奔赴真速” vr，使得 t_receiver = t_tanker
     const double receiver_dist_m = Dist2D(receiver->initial_position_xy, meet_point);
+    const double vr = SafeDiv(receiver_dist_m, t_tanker_arrive, std::numeric_limits<double>::infinity());
 
-    out.reserve(receiver_tas_candidates_mps.size());
-    for (double vr : receiver_tas_candidates_mps) {
-      MeetingCandidate c;
-      c.receiver_tas_mps = vr;
-      c.meet_tas_mps = meet_tas;
+    MeetingCandidate c;
+    c.meet_tas_mps = meet_tas;
+    c.receiver_tas_mps = vr;
+    c.tanker_arrive_time_s = t_tanker_arrive;
+    c.receiver_arrive_time_s = t_tanker_arrive;
+    c.delta_t_s = 0.0;
+    c.n_loops = 0;
+    c.receiver_arrive_time_adjusted_s = c.receiver_arrive_time_s;
 
-      // 速度范围
-      if (vr < r_vmin - 1e-9 || vr > r_vmax + 1e-9) {
-        c.feasible = false;
-        c.infeasible_reason = "receiver dash speed out of bounds";
-        continue;
-      }
-
-      const double t_receiver_arrive = SafeDiv(receiver_dist_m, vr, std::numeric_limits<double>::infinity());
-
-      c.tanker_arrive_time_s = t_tanker_arrive;
-      c.receiver_arrive_time_s = t_receiver_arrive;
-      c.delta_t_s = c.receiver_arrive_time_s - c.tanker_arrive_time_s; // receiver - tanker
-
-      if (!(std::isfinite(t_receiver_arrive) && std::isfinite(t_tanker_arrive))) {
-        c.feasible = false;
-        c.infeasible_reason = "invalid arrival time";
-        continue;
-      }
-
-      // 按图：先匹配一个速度，使受油机“同时或早于”加油机到达点位（否则就无法靠盘旋补救）
-      if (c.delta_t_s > 1e-9) {
-        c.feasible = false;
-        c.infeasible_reason = "receiver arrives later than tanker (cannot be fixed by loiter)";
-        continue;
-      }
-
-      c.feasible = true;
+    if (!std::isfinite(vr)) {
+      c.feasible = false;
+      c.infeasible_reason = "computed receiver dash speed is invalid";
       out.push_back(c);
+      return out;
     }
 
+    if (vr < r_vmin - 1e-9 || vr > r_vmax + 1e-9) {
+      c.feasible = false;
+      c.infeasible_reason = "computed receiver dash speed out of bounds";
+      out.push_back(c);
+      return out;
+    }
+
+    c.feasible = true;
+    out.push_back(c);
     return out;
-  }
-};
-
-class HoldingLoopCalculator {
-public:
-  virtual ~HoldingLoopCalculator() = default;
-
-  virtual void Apply(std::vector<MeetingCandidate>& cands,
-                     double loop_period_s) const
-  {
-    if (loop_period_s <= 1e-6) loop_period_s = 10.0;
-
-    for (auto& c : cands) {
-      if (!c.feasible) continue;
-
-      // delta = receiver - tanker
-      // delta <= 0：受油机早到或同时到 -> 需要盘旋等待（使调整后 >= tanker）
-      // delta >  0：受油机晚到 -> 本环节应判不可行（因为盘旋只能“拖慢”，不能“加速补迟到”）
-      // if (c.delta_t_s > 1e-9) {
-      //   c.feasible = false;
-      //   c.infeasible_reason = "receiver late arrival detected in loop stage";
-      //   continue;
-      // }
-
-      if (c.delta_t_s >= -1e-9) {
-        c.n_loops = 0;
-        c.receiver_arrive_time_adjusted_s = c.receiver_arrive_time_s;
-      } else {
-        c.n_loops = static_cast<int>(std::ceil((-c.delta_t_s) / loop_period_s - 1e-12));
-        if (c.n_loops < 0) c.n_loops = 0;
-        c.receiver_arrive_time_adjusted_s = c.receiver_arrive_time_s + c.n_loops * loop_period_s;
-      }
-    }
   }
 };
 
@@ -495,7 +368,7 @@ public:
       double tas_mps)
   {
     const auto& alts = fuel_table.altitude_levels;
-    const auto& tass = fuel_table.speed_levels;       // <- 关键：这里是 TAS 网格
+    const auto& tass = fuel_table.speed_levels;       // TAS 网格
     const auto& data = fuel_table.consumption_data;   // alts.size x tass.size
 
     if (alts.empty() || tass.empty() || data.empty()) return std::numeric_limits<double>::infinity();
@@ -508,9 +381,8 @@ public:
       const size_t n = grid.size();
       if (n == 1) { *i0 = *i1 = 0; *t = 0.0; return; }
 
-      // clamp
       if (q <= grid.front()) { *i0 = 0; *i1 = 1; *t = 0.0; return; }
-      if (q >= grid.back())  { *i0 = n-2; *i1 = n-1; *t = 1.0; return; }
+      if (q >= grid.back())  { *i0 = n - 2; *i1 = n - 1; *t = 1.0; return; }
 
       size_t lo = 0, hi = n - 1;
       while (hi - lo > 1) {
@@ -527,8 +399,8 @@ public:
       if (*t > 1.0) *t = 1.0;
     };
 
-    size_t a0=0,a1=0,v0=0,v1=0;
-    double ta=0.0,tv=0.0;
+    size_t a0 = 0, a1 = 0, v0 = 0, v1 = 0;
+    double ta = 0.0, tv = 0.0;
     bracket(alts, alt_m, &a0, &a1, &ta);
     bracket(tass, tas_mps, &v0, &v1, &tv);
 
@@ -553,17 +425,15 @@ public:
     if (alt_idx < 0 || alt_idx >= (int)perf.altitude_levels.size()) return false;
     if (alt_idx < 0 || alt_idx >= (int)perf.true_airspeed_data.size()) return false;
 
-    const auto& ias_grid = perf.speed_levels;              // <- IAS
-    const auto& tas_row  = perf.true_airspeed_data[alt_idx]; // <- TAS values
+    const auto& ias_grid = perf.speed_levels;                // IAS
+    const auto& tas_row  = perf.true_airspeed_data[alt_idx]; // TAS
 
     if (ias_grid.size() < 2 || tas_row.size() != ias_grid.size()) return false;
 
-    // 单调递增：只要在区间内即可反解
     if (target_tas < tas_row.front() - 1e-9 || target_tas > tas_row.back() + 1e-9) {
       return false;
     }
 
-    // 若刚好命中格点
     for (size_t j = 0; j < tas_row.size(); ++j) {
       if (std::fabs(tas_row[j] - target_tas) < 1e-9) {
         *out_ias = ias_grid[j];
@@ -571,15 +441,14 @@ public:
       }
     }
 
-    // 找到区间 [j, j+1]
     size_t j = 0;
-    while (j + 1 < tas_row.size() && !(tas_row[j] <= target_tas && target_tas <= tas_row[j+1])) {
+    while (j + 1 < tas_row.size() && !(tas_row[j] <= target_tas && target_tas <= tas_row[j + 1])) {
       ++j;
     }
     if (j + 1 >= tas_row.size()) return false;
 
-    const double tas0 = tas_row[j], tas1 = tas_row[j+1];
-    const double ias0 = ias_grid[j], ias1 = ias_grid[j+1];
+    const double tas0 = tas_row[j], tas1 = tas_row[j + 1];
+    const double ias0 = ias_grid[j], ias1 = ias_grid[j + 1];
     const double den  = tas1 - tas0;
     if (std::fabs(den) < 1e-12) {
       *out_ias = ias0;
@@ -600,27 +469,24 @@ public:
     }
     if (!r) return;
 
-    // H_ref：优先 receiver 初始高度，否则 racetrack 高度
     double h_ref = r->initial_position_lla.alt_m;
     if (std::fabs(h_ref) < 1e-6 && ctx.racetrack.altitude_m > 1e-6) {
       h_ref = ctx.racetrack.altitude_m;
     }
 
     const auto& perf = r->cruise_perf;
-    const bool has_perf =
-        (!perf.altitude_levels.empty() &&
-         !perf.speed_levels.empty() &&
-         !perf.true_airspeed_data.empty());
+    const bool has_perf = (!perf.altitude_levels.empty() &&
+                           !perf.speed_levels.empty() &&
+                           !perf.true_airspeed_data.empty());
 
     for (auto& c : cands) {
       if (!c.feasible) continue;
 
       const double target_tas = c.meet_tas_mps;
 
-      // 无真速表：兜底（保持你之前的 fallback）
       if (!has_perf) {
         c.meet_altitude_m = h_ref;
-        c.meet_ias_mps = target_tas;      // 兜底：IAS≈TAS
+        c.meet_ias_mps = target_tas; // 兜底：IAS≈TAS
         c.altitude_change_m = 0.0;
         continue;
       }
@@ -632,20 +498,17 @@ public:
       double best_fuel_rate = std::numeric_limits<double>::infinity();
 
       for (int i = 0; i < (int)perf.altitude_levels.size(); ++i) {
-        // 行列防御
         if (i >= (int)perf.true_airspeed_data.size()) break;
         if (perf.true_airspeed_data[i].size() != perf.speed_levels.size()) continue;
 
         double ias = 0.0;
         if (!InverseIASAtAltByTAS(perf, i, target_tas, &ias)) {
-          continue; // 该高度层无法实现 target_tas
+          continue;
         }
 
         const double alt = perf.altitude_levels[i];
         const double alt_change = std::fabs(alt - h_ref);
-
-        // 并列打平：用油耗表 (H, TAS)->kg/s（注意：油耗表 speed_levels 是 TAS）
-        double fuel_rate = FuelRateKgps_Bilinear(r->fuel_table, alt, target_tas);
+        const double fuel_rate = FuelRateKgps_Bilinear(r->fuel_table, alt, target_tas);
 
         if (!found ||
             alt_change < best_alt_change - 1e-9 ||
@@ -659,7 +522,6 @@ public:
       }
 
       if (!found) {
-        // 真实算法口径：找不到可行高度层就判不可行（避免悄悄用错值）
         c.feasible = false;
         c.infeasible_reason = "meet_tas out of cruise table (no feasible altitude/IAS)";
         continue;
@@ -672,27 +534,19 @@ public:
   }
 };
 
-
 class CoarseCostEvaluator {
 public:
   virtual ~CoarseCostEvaluator() = default;
 
-  // -------------------------
-  // (H, TAS) -> fuel_rate_kgps  双线性插值
-  // 说明：
-  //  - fuel_table.speed_levels 在你的定义里是 "真速 TAS 网格"（m/s）
-  //  - fuel_table.altitude_levels 是高度网格（m）
-  //  - fuel_rate 单位 kg/s
-  //  - 若查询点超出表范围：这里采用“边界夹紧(clamp)”的方式（工程上也可改为判不可行）
-  // -------------------------
+  // (H, TAS) -> fuel_rate_kgps  双线性插值（fuel_table.speed_levels 是 TAS 网格）
   static double LookupFuelRateKgps_Bilinear(
       const decltype(refuel::AircraftConfig{}.fuel_table)& fuel_table,
       double alt_m,
       double tas_mps)
   {
     const auto& alts = fuel_table.altitude_levels;
-    const auto& tass = fuel_table.speed_levels;         // <- 关键：这里是 TAS 网格
-    const auto& data = fuel_table.consumption_data;     // 形状应为 alts.size() x tass.size()
+    const auto& tass = fuel_table.speed_levels;
+    const auto& data = fuel_table.consumption_data;
 
     if (alts.empty() || tass.empty() || data.empty()) {
       return std::numeric_limits<double>::quiet_NaN();
@@ -714,17 +568,9 @@ public:
         return;
       }
 
-      // clamp 到边界
-      if (q <= grid.front()) {
-        *i0 = 0; *i1 = 1; *t = 0.0;
-        return;
-      }
-      if (q >= grid.back()) {
-        *i0 = n - 2; *i1 = n - 1; *t = 1.0;
-        return;
-      }
+      if (q <= grid.front()) { *i0 = 0; *i1 = 1; *t = 0.0; return; }
+      if (q >= grid.back())  { *i0 = n - 2; *i1 = n - 1; *t = 1.0; return; }
 
-      // 找到 i0 使 grid[i0] <= q <= grid[i0+1]
       size_t lo = 0, hi = n - 1;
       while (hi - lo > 1) {
         const size_t mid = (lo + hi) / 2;
@@ -736,7 +582,7 @@ public:
 
       const double g0 = grid[*i0];
       const double g1 = grid[*i1];
-      const double den = (g1 - g0);
+      const double den = g1 - g0;
       *t = (std::fabs(den) < 1e-12) ? 0.0 : (q - g0) / den;
       if (*t < 0.0) *t = 0.0;
       if (*t > 1.0) *t = 1.0;
@@ -747,18 +593,14 @@ public:
     bracket(alts, alt_m, &a0, &a1, &ta);
     bracket(tass, tas_mps, &v0, &v1, &tv);
 
-    // 四个角点
     const double f00 = data[a0][v0];
     const double f01 = data[a0][v1];
     const double f10 = data[a1][v0];
     const double f11 = data[a1][v1];
 
-    // 双线性插值
     const double f0 = f00 + (f01 - f00) * tv;
     const double f1 = f10 + (f11 - f10) * tv;
-    const double f  = f0 + (f1 - f0) * ta;
-
-    return f;
+    return f0 + (f1 - f0) * ta;
   }
 
   virtual std::optional<MeetingCandidate> PickBest(
@@ -769,58 +611,40 @@ public:
     double best_cost = std::numeric_limits<double>::infinity();
     std::optional<MeetingCandidate> best;
 
-    // 当前 MeetingCandidate 结构不带 receiver_id，这里仍沿用“取第一个 receiver”的最小假设。
-    // 若你后续让 candidate 带 receiver_id，建议在这里按 id 精确匹配 receiver 配置。
     const refuel::AircraftConfig* receiver = nullptr;
     if (!ctx.receivers.empty()) receiver = &ctx.receivers.front();
 
     for (auto& c : cands) {
       if (!c.feasible) continue;
 
-      // ---- 时间：meeting_time 取两者“最终到达时间”的 max（白框4保证 receiver 不早到，但这里更稳妥）----
+      // 时间：mode1 要求同时到达；这里仍按 max(两者最终到达时间) 计算，保持稳健。
       if (c.receiver_arrive_time_adjusted_s <= 1e-9) {
         c.receiver_arrive_time_adjusted_s = c.receiver_arrive_time_s;
       }
       const double meeting_time_s = std::max(c.tanker_arrive_time_s, c.receiver_arrive_time_adjusted_s);
       c.total_time = meeting_time_s;
 
-      // ============================================================
-      // 油耗：按你的新口径，油耗表是 (H, TAS)->kg/s
-      // 注意：fuel_table.speed_levels 是 TAS 网格；cruise_perf.speed_levels 才是 IAS 网格（此处不混用）
-      // ============================================================
-
-      // --- tanker fuel ---
-      // 关键：这里用会合高度 + 会合真速(TAS) 查油耗率
-      // 你 mode0 中 meet_tas_mps 通常等于 tanker_tas_mps（加油机定速），所以这很自然。
+      // tanker fuel：按“到达点位耗时”计油耗（不额外计等待）
       double tanker_rate = LookupFuelRateKgps_Bilinear(ctx.tanker.fuel_table, c.meet_altitude_m, c.meet_tas_mps);
       if (!std::isfinite(tanker_rate) || tanker_rate <= 1e-12) {
-        tanker_rate = 2.0; // 兜底：保证空表也能跑
+        tanker_rate = 2.0; // 兜底
       }
-      // 关键：tanker 只按“到达点位耗时”计油耗（不额外计等待）
       const double tanker_fuel = tanker_rate * c.tanker_arrive_time_s;
 
-      // --- receiver fuel ---
+      // receiver fuel：按奔赴真速 vr 计油耗
       double receiver_rate = 1.0;
       if (receiver) {
-        // 关键：油耗表自变量是 TAS。
-        // 默认用 receiver_tas_mps（白框6要在候选里选的受油机真速）。
-        // 若你们定义“会合段受油机必须与加油机同速”，这里可改为 c.meet_tas_mps。
         const double tas_for_fuel = (c.receiver_tas_mps > 1e-6) ? c.receiver_tas_mps : c.meet_tas_mps;
-
         receiver_rate = LookupFuelRateKgps_Bilinear(receiver->fuel_table, c.meet_altitude_m, tas_for_fuel);
         if (!std::isfinite(receiver_rate) || receiver_rate <= 1e-12) {
           receiver_rate = 1.0;
         }
       }
-      // 关键：receiver 按“adjusted_time(含盘旋/等待)”计油耗
       const double receiver_fuel = receiver_rate * c.receiver_arrive_time_adjusted_s;
 
       c.total_fuel = tanker_fuel + receiver_fuel;
-
-      // ---- 代价：按偏好（油耗/时间） ----
       c.cost = (pref == Preference::kMinFuel) ? c.total_fuel : c.total_time;
 
-      // ---- 选最优 + tie-break（你原逻辑保留：主目标相同时用副目标打平）----
       if (c.cost < best_cost - 1e-12) {
         best_cost = c.cost;
         best = c;
@@ -836,7 +660,6 @@ public:
     return best;
   }
 };
-
 
 class GlobalSelector {
 public:
@@ -862,29 +685,25 @@ public:
 };
 
 // ====================================================================
-// 组合器：把白框 1/2/3/4/5/6/9 串起来
+// 组合器：把白框 1/2/3/5/6/9 串起来
 // ====================================================================
 
-class Mode0FixedSpeedSearcher {
+class Mode1FixedSpeedSearcher {
 public:
   struct Dependencies {
     TankerSpeedDiscretizer* tanker_speed_discretizer = nullptr;
     EntryPointComboGenerator* combo_generator = nullptr;
     FeasibleCandidateGenerator* candidate_generator = nullptr;
-    HoldingLoopCalculator* loop_calculator = nullptr;
     MeetAltitudeSelector* altitude_selector = nullptr;
     CoarseCostEvaluator* cost_evaluator = nullptr;
     GlobalSelector* global_selector = nullptr;
   };
 
-  explicit Mode0FixedSpeedSearcher(Dependencies deps) : deps_(deps) {}
+  explicit Mode1FixedSpeedSearcher(Dependencies deps) : deps_(deps) {}
 
-  BestGlobalResult Solve(const PlanningContext& ctx,
-                         Preference pref,
-                         const std::vector<double>& receiver_tas_candidates_mps) const
-  {
+  BestGlobalResult Solve(const PlanningContext& ctx, Preference pref) const {
     if (!deps_.tanker_speed_discretizer || !deps_.combo_generator || !deps_.candidate_generator ||
-        !deps_.loop_calculator || !deps_.altitude_selector || !deps_.cost_evaluator || !deps_.global_selector) {
+        !deps_.altitude_selector || !deps_.cost_evaluator || !deps_.global_selector) {
       return {};
     }
 
@@ -893,46 +712,22 @@ public:
 
     std::vector<BestUnderTankerSpeed> best_under_all_vt;
 
-    // 外层：遍历 vt
     for (double vt : vt_cands.tanker_tas_mps) {
       BestUnderTankerSpeed best_vt;
       best_vt.tanker_tas_mps = vt;
       best_vt.best.cost = std::numeric_limits<double>::infinity();
 
-      // 内层：遍历 combo
       for (const auto& combo : combos.combos) {
-        std::vector<MeetingCandidate> cands =
-            deps_.candidate_generator->Generate(ctx, vt, combo, receiver_tas_candidates_mps);
+        std::vector<MeetingCandidate> cands = deps_.candidate_generator->Generate(ctx, vt, combo);
         if (cands.empty()) {
           continue;
         }
 
-        // 白框4：盘旋圈数
-        const double loop_len_m = RacetrackLoopLengthM(ctx);
-
-        double v_loop = 0.0;
-        if (!combo.choices.empty()) {
-          const std::string& rid = combo.choices.front().receiver_id;
-          auto it = ctx.receiver_speed_bounds.find(rid);
-          if (it != ctx.receiver_speed_bounds.end()) {
-            v_loop = it->second.cruise_speed_mps;
-          }
-        }
-        if (v_loop <= 1e-6) v_loop = ctx.racetrack.speed_mps;
-        if (v_loop <= 1e-6) v_loop = vt;
-        const double loop_period_s = SafeDiv(loop_len_m, v_loop, 10.0);
-
-        deps_.loop_calculator->Apply(cands, loop_period_s);
-
-        // 白框5：反查表选会合高度（此处按 combo.front 的 receiver 做）
         if (!combo.choices.empty()) {
           deps_.altitude_selector->Apply(cands, ctx, combo.choices.front().receiver_id);
         }
 
-        // 白框6：粗代价选最优 candidate
-        std::optional<MeetingCandidate> best_cand =
-            deps_.cost_evaluator->PickBest(cands, ctx, pref);
-
+        std::optional<MeetingCandidate> best_cand = deps_.cost_evaluator->PickBest(cands, ctx, pref);
         if (!best_cand.has_value()) {
           continue;
         }
@@ -949,7 +744,6 @@ public:
       }
     }
 
-    // 白框9：全局选优
     return deps_.global_selector->Select(best_under_all_vt, pref);
   }
 
@@ -957,4 +751,4 @@ private:
   Dependencies deps_;
 };
 
-} // namespace refuel::mode0
+} // namespace refuel::mode1

@@ -50,6 +50,7 @@ struct CruisePerformanceTable {
 // 具体含义/维度由你的算法决定（常见是 alt × speed 或 alt × index）。
 struct FuelConsumptionTable {
   std::vector<double> altitude_levels;
+  std::vector<double> speed_levels;
   std::vector<std::vector<double>> consumption_data;
 };
 

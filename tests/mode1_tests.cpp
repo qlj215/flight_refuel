@@ -6,9 +6,9 @@
 #include <string>
 #include <vector>
 
-#include "mode0/mode0_fixed_speed_search.hpp"
+#include "mode1/mode1_fixed_speed_search.hpp"
 
-using refuel::mode0::Preference;
+using refuel::mode1::Preference;
 
 namespace {
 
@@ -21,7 +21,7 @@ static bool ExpectNear(double a, double b, double eps = 1e-6) {
 // 1) 单元测试：白框 9 GlobalSelector
 // =========================
 bool Test_GlobalSelector_PicksMinCost() {
-  using namespace refuel::mode0;
+  using namespace refuel::mode1;
 
   GlobalSelector selector;
 
@@ -54,7 +54,7 @@ bool Test_GlobalSelector_PicksMinCost() {
 // 目的：验证离散输出包含 [min,max] 网格 + cruise 插入 + 排序稳定
 // =========================
 bool Test_TankerSpeedDiscretizer_Basic() {
-  using namespace refuel::mode0;
+  using namespace refuel::mode1;
 
   refuel::PlanningContext ctx;
   ctx.tanker_speed_bounds.min_speed_mps = 100.0;
@@ -79,7 +79,7 @@ bool Test_TankerSpeedDiscretizer_Basic() {
 // 目的：验证 topK 逻辑 + 组合笛卡尔积数量
 // =========================
 bool Test_EntryPointComboGenerator_TopKAndCartesian() {
-  using namespace refuel::mode0;
+  using namespace refuel::mode1;
 
   refuel::PlanningContext ctx;
 
@@ -123,12 +123,12 @@ bool Test_EntryPointComboGenerator_TopKAndCartesian() {
 // =========================
 // 4) 单元测试：白框 3 FeasibleCandidateGenerator
 // 目的：验证：
-//  - 速度 bounds 检查
-//  - meet_tas 与 receiver bounds 关系（meet_tas=tanker_tas）
-//  - “受油机不能更晚到”（delta_t<=0）
+//  - 解 vr（允许小数），使得 t_receiver == t_tanker
+//  - vr bounds 检查（vr out-of-bounds -> 返回 infeasible candidate）
+//  - tanker speed bounds / meet_tas bounds 触发时，返回空集合（对齐实现）
 // =========================
-bool Test_FeasibleCandidateGenerator_BoundsAndDelta() {
-  using namespace refuel::mode0;
+bool Test_FeasibleCandidateGenerator_SolveVrAndBounds() {
+  using namespace refuel::mode1;
 
   refuel::PlanningContext ctx;
 
@@ -140,16 +140,17 @@ bool Test_FeasibleCandidateGenerator_BoundsAndDelta() {
   r.initial_position_xy = {0.0, 0.0, 0.0};
   ctx.receivers = {r};
 
-  // 进入点：离 1km
+  // 进入点：离 tanker 1km
   ctx.racetrack.entrypoints_xy = {{1000.0, 0.0, 0.0}};
 
-  // bounds：让 tanker_tas 合法，receiver 也允许 meet_tas=tanker_tas
-  ctx.tanker_speed_bounds.min_speed_mps = 90.0;
-  ctx.tanker_speed_bounds.max_speed_mps = 110.0;
+  // tanker bounds
+  ctx.tanker_speed_bounds.min_speed_mps = 80.0;
+  ctx.tanker_speed_bounds.max_speed_mps = 120.0;
 
+  // receiver bounds
   refuel::SpeedBounds rb;
-  rb.min_speed_mps = 80.0;
-  rb.max_speed_mps = 120.0;
+  rb.min_speed_mps = 70.0;
+  rb.max_speed_mps = 150.0;
   rb.cruise_speed_mps = 100.0;
   ctx.receiver_speed_bounds["R1"] = rb;
 
@@ -157,79 +158,76 @@ bool Test_FeasibleCandidateGenerator_BoundsAndDelta() {
   EntryPointCombo combo;
   combo.choices.push_back({"R1", 0});
 
-  // receiver 候选：注意 vt=100 时，vr<100 会导致 receiver 更晚到（delta>0）被判 infeasible
-  std::vector<double> receiver_candidates{90.0, 100.0, 110.0};
-
   FeasibleCandidateGenerator gen;
-  const double tanker_tas = 100.0;
-  std::vector<MeetingCandidate> cands = gen.Generate(ctx, tanker_tas, combo, receiver_candidates);
 
-  // 期望只有 vr>=100 的可行（100,110）；vr=90 会更晚到 => infeasible 丢弃
-  REFUEL_EXPECT_EQ(static_cast<int>(cands.size()), 2);
-  REFUEL_EXPECT_TRUE(ExpectNear(cands[0].receiver_tas_mps, 100.0) || ExpectNear(cands[1].receiver_tas_mps, 100.0));
-  REFUEL_EXPECT_TRUE(ExpectNear(cands[0].receiver_tas_mps, 110.0) || ExpectNear(cands[1].receiver_tas_mps, 110.0));
-  for (const auto& c : cands) {
-    REFUEL_EXPECT_TRUE(c.feasible);
-    REFUEL_EXPECT_TRUE(c.delta_t_s <= 1e-9); // receiver 不能更晚到
-    REFUEL_EXPECT_EQ(c.meet_tas_mps, tanker_tas); // 最小实现：meet_tas = tanker_tas
+  // ---- Case A：可行：tanker_dist=1000, vt=100 => t=10s；receiver_dist=1000 => vr=100
+  {
+    const double vt = 100.0;
+    std::vector<MeetingCandidate> cands = gen.Generate(ctx, vt, combo);
+
+    REFUEL_EXPECT_EQ(static_cast<int>(cands.size()), 1);
+    REFUEL_EXPECT_TRUE(cands[0].feasible);
+    REFUEL_EXPECT_TRUE(ExpectNear(cands[0].meet_tas_mps, vt));
+    REFUEL_EXPECT_TRUE(ExpectNear(cands[0].tanker_arrive_time_s, 10.0));
+    REFUEL_EXPECT_TRUE(ExpectNear(cands[0].receiver_arrive_time_s, 10.0));
+    REFUEL_EXPECT_TRUE(ExpectNear(cands[0].delta_t_s, 0.0));
+    REFUEL_EXPECT_TRUE(ExpectNear(cands[0].receiver_tas_mps, 100.0));
   }
+
+  // ---- Case B：vr out-of-bounds：让 receiver 更远，tanker 更近 -> vr >> vt
+  {
+    refuel::PlanningContext ctx2 = ctx;
+    ctx2.receivers[0].initial_position_xy = {-5000.0, 0.0, 0.0}; // receiver_dist=6000
+
+    // 收紧 receiver bounds：保证 meet_tas=85 合法，但 vr 不合法
+    refuel::SpeedBounds rb2;
+    rb2.min_speed_mps = 70.0;
+    rb2.max_speed_mps = 90.0;
+    rb2.cruise_speed_mps = 80.0;
+    ctx2.receiver_speed_bounds["R1"] = rb2;
+
+    const double vt = 85.0; // meet_tas=85 within [70,90]
+    std::vector<MeetingCandidate> cands = gen.Generate(ctx2, vt, combo);
+
+    // 由于 meet_tas 在 bounds 内，这里会返回一个 infeasible candidate（而不是空集合）
+    REFUEL_EXPECT_EQ(static_cast<int>(cands.size()), 1);
+    REFUEL_EXPECT_TRUE(!cands[0].feasible);
+    // vr = receiver_dist / (tanker_dist/vt) = 6000 / (1000/85) = 510
+    REFUEL_EXPECT_TRUE(ExpectNear(cands[0].receiver_tas_mps, 510.0));
+  }
+
+  // ---- Case C：tanker speed out of bounds -> 返回空集合
+  {
+    const double vt = 200.0; // > ctx.tanker_speed_bounds.max
+    std::vector<MeetingCandidate> cands = gen.Generate(ctx, vt, combo);
+    REFUEL_EXPECT_EQ(static_cast<int>(cands.size()), 0);
+  }
+
+  // ---- Case D：meet_tas（=vt）不在 receiver bounds -> 返回空集合
+  {
+    refuel::PlanningContext ctx3 = ctx;
+    refuel::SpeedBounds rb3;
+    rb3.min_speed_mps = 70.0;
+    rb3.max_speed_mps = 90.0; // vt=100 out
+    rb3.cruise_speed_mps = 80.0;
+    ctx3.receiver_speed_bounds["R1"] = rb3;
+
+    const double vt = 100.0;
+    std::vector<MeetingCandidate> cands = gen.Generate(ctx3, vt, combo);
+    REFUEL_EXPECT_EQ(static_cast<int>(cands.size()), 0);
+  }
+
   return true;
 }
 
 // =========================
-// 5) 单元测试：白框 4 HoldingLoopCalculator
-// 目的：验证 “早到->补圈数，晚到->保持不可行/不进入候选” 的逻辑（对齐新文件）
-// =========================
-bool Test_HoldingLoopCalculator_MinLoops() {
-  using namespace refuel::mode0;
-
-  HoldingLoopCalculator calc;
-
-  std::vector<MeetingCandidate> cands;
-
-  // candA：早到 25s（delta=-25），loop_period=10 -> ceil(25/10)=3
-  MeetingCandidate a;
-  a.feasible = true;
-  a.receiver_arrive_time_s = 50.0;
-  a.delta_t_s = -25.0;
-  cands.push_back(a);
-
-  // candB：刚好同到（delta=0） -> 0 圈
-  MeetingCandidate b;
-  b.feasible = true;
-  b.receiver_arrive_time_s = 80.0;
-  b.delta_t_s = 0.0;
-  cands.push_back(b);
-
-  // candC：晚到（delta=+5）在白框 4 不应该帮它“补圈”，而应保持不改（这里不做额外断言）
-  MeetingCandidate c;
-  c.feasible = true;
-  c.receiver_arrive_time_s = 100.0;
-  c.delta_t_s = 5.0;
-  cands.push_back(c);
-
-  calc.Apply(cands, 10.0);
-
-  REFUEL_EXPECT_EQ(cands[0].n_loops, 3);
-  REFUEL_EXPECT_TRUE(ExpectNear(cands[0].receiver_arrive_time_adjusted_s, 80.0)); // 50 + 3*10
-
-  REFUEL_EXPECT_EQ(cands[1].n_loops, 0);
-  REFUEL_EXPECT_TRUE(ExpectNear(cands[1].receiver_arrive_time_adjusted_s, 80.0));
-
-  // candC：按新实现，不会被强行补圈（保持 adjusted_time=原 arrive_time）
-  REFUEL_EXPECT_EQ(cands[2].n_loops, 0);
-  REFUEL_EXPECT_TRUE(ExpectNear(cands[2].receiver_arrive_time_adjusted_s, 100.0));
-  return true;
-}
-
-// =========================
-// 6) 单元测试：白框 5 MeetAltitudeSelector
-// 目的：验证：
+// 5) 单元测试：白框 5 MeetAltitudeSelector
+// 目的：
 //   A) H_ref 优先规则：优先用 receiver.initial_position_lla.alt_m；否则回退 racetrack.altitude_m
 //   B) meet_ias_mps 来自 “(H, IAS)->TAS” 真速表的反查（不再假设 IAS≈TAS）
 // =========================
 bool Test_MeetAltitudeSelector_UsesInitialAltOrFallback() {
-  using namespace refuel::mode0;
+  using namespace refuel::mode1;
 
   refuel::PlanningContext ctx;
 
@@ -250,7 +248,7 @@ bool Test_MeetAltitudeSelector_UsesInitialAltOrFallback() {
   {
     auto& cp = ctx.receivers[0].cruise_perf;
     cp.altitude_levels = {5000.0, 6000.0, 7000.0};
-    cp.speed_levels    = {100.0, 140.0, 180.0}; // 注意：这里 speed_levels 是 IAS（表速）
+    cp.speed_levels    = {100.0, 140.0, 180.0}; // IAS
 
     cp.true_airspeed_data.resize(cp.altitude_levels.size());
     for (size_t i = 0; i < cp.altitude_levels.size(); ++i) {
@@ -265,12 +263,10 @@ bool Test_MeetAltitudeSelector_UsesInitialAltOrFallback() {
   }
 
   // --------- 构造油耗表 fuel_consumption_table： (H, TAS)->fuel_rate_kgps ----------
-  // 这里只是为了让“并列打平需要查油耗”时不会因空表出问题。
-  // 简单设置：fuel_rate = 1.0 + 0.0001*alt + 0.001*TAS （随便单调即可）
   {
     auto& ft = ctx.receivers[0].fuel_table;
     ft.altitude_levels = {5000.0, 6000.0, 7000.0};
-    ft.speed_levels    = {100.0, 140.0, 180.0};  // 注意：这里 speed_levels 是 TAS（真速）
+    ft.speed_levels    = {100.0, 140.0, 180.0};  // TAS
 
     ft.consumption_data.resize(ft.altitude_levels.size());
     for (size_t i = 0; i < ft.altitude_levels.size(); ++i) {
@@ -308,7 +304,6 @@ bool Test_MeetAltitudeSelector_UsesInitialAltOrFallback() {
   // --------- 再测 fallback：receiver 初始高度=0 -> H_ref = racetrack.altitude=5000 ----------
   ctx.receivers[0].initial_position_lla.alt_m = 0.0;
 
-  // 清掉上次输出字段（可选）
   for (auto& c : cands) {
     c.meet_altitude_m = 0.0;
     c.meet_ias_mps = 0.0;
@@ -332,26 +327,34 @@ bool Test_MeetAltitudeSelector_UsesInitialAltOrFallback() {
   return true;
 }
 
-
 // =========================
-// 7) 单元测试：白框 6 CoarseCostEvaluator
+// 6) 单元测试：白框 6 CoarseCostEvaluator
 // 目的：验证 pref 不同会选不同候选（fuel vs time）
 // =========================
 bool Test_CoarseCostEvaluator_PrefAffectsChoice() {
-  using namespace refuel::mode0;
+  using namespace refuel::mode1;
 
   CoarseCostEvaluator eval;
   refuel::PlanningContext ctx;
 
+  // 让 ctx.receivers.front() 存在，避免 receiver_rate 走空指针分支
+  refuel::AircraftConfig r;
+  r.id = "R1";
+  ctx.receivers = {r};
+
   std::vector<MeetingCandidate> cands;
 
   // cand1：fuel 小，但 time 大
+  // 使用 fallback rate：tanker_rate=2.0，receiver_rate=1.0
   // tanker=10, receiver_adj=100 -> time=max=100, fuel=2*10+100=120
   MeetingCandidate c1;
   c1.feasible = true;
   c1.tanker_arrive_time_s = 10.0;
   c1.receiver_arrive_time_s = 100.0;
   c1.receiver_arrive_time_adjusted_s = 100.0;
+  c1.meet_altitude_m = 6000.0;
+  c1.meet_tas_mps = 120.0;
+  c1.receiver_tas_mps = 120.0;
   cands.push_back(c1);
 
   // cand2：time 小，但 fuel 大
@@ -361,6 +364,9 @@ bool Test_CoarseCostEvaluator_PrefAffectsChoice() {
   c2.tanker_arrive_time_s = 90.0;
   c2.receiver_arrive_time_s = 90.0;
   c2.receiver_arrive_time_adjusted_s = 90.0;
+  c2.meet_altitude_m = 6000.0;
+  c2.meet_tas_mps = 120.0;
+  c2.receiver_tas_mps = 120.0;
   cands.push_back(c2);
 
   {
@@ -377,64 +383,59 @@ bool Test_CoarseCostEvaluator_PrefAffectsChoice() {
 }
 
 // =========================
-// 8) 冒烟测试：空 ctx 不崩溃，且返回 infeasible
+// 7) 冒烟测试：空 ctx 不崩溃，且返回 infeasible
 // =========================
-bool Test_Mode0_Smoke_NoCrashOnEmptyCtx() {
-  using namespace refuel::mode0;
+bool Test_Mode1_Smoke_NoCrashOnEmptyCtx() {
+  using namespace refuel::mode1;
 
   TankerSpeedDiscretizer tanker_speed_discretizer;
   EntryPointComboGenerator combo_generator;
   FeasibleCandidateGenerator candidate_generator;
-  HoldingLoopCalculator loop_calculator;
   MeetAltitudeSelector altitude_selector;
   CoarseCostEvaluator cost_evaluator;
   GlobalSelector global_selector;
 
-  Mode0FixedSpeedSearcher::Dependencies deps;
+  Mode1FixedSpeedSearcher::Dependencies deps;
   deps.tanker_speed_discretizer = &tanker_speed_discretizer;
   deps.combo_generator = &combo_generator;
   deps.candidate_generator = &candidate_generator;
-  deps.loop_calculator = &loop_calculator;
   deps.altitude_selector = &altitude_selector;
   deps.cost_evaluator = &cost_evaluator;
   deps.global_selector = &global_selector;
 
-  Mode0FixedSpeedSearcher searcher(deps);
+  Mode1FixedSpeedSearcher searcher(deps);
 
   refuel::PlanningContext ctx; // 空 ctx
-  std::vector<double> receiver_candidates;
-  BestGlobalResult best = searcher.Solve(ctx, Preference::kMinFuel, receiver_candidates);
+  BestGlobalResult best = searcher.Solve(ctx, Preference::kMinFuel);
 
   REFUEL_EXPECT_TRUE(!best.feasible);
   return true;
 }
 
 // =========================
-// 9) 真实实现的端到端测试：尽可能覆盖白框 1/2/3/4/5/6/9
+// 8) 真实实现的端到端测试：尽可能覆盖白框 1/2/3/5/6/9
 // 目的：不用 fake，构造一个“最小可行 ctx”，验证 Solve() 能走完整流程并选到符合直觉的最优。
 // =========================
-bool Test_Mode0_EndToEnd_RealImpl_MinimalFeasible() {
-  using namespace refuel::mode0;
+bool Test_Mode1_EndToEnd_RealImpl_MinimalFeasible() {
+  using namespace refuel::mode1;
 
   // 真实实现依赖
   TankerSpeedDiscretizer tanker_speed_discretizer;
   EntryPointComboGenerator combo_generator;
   FeasibleCandidateGenerator candidate_generator;
-  HoldingLoopCalculator loop_calculator;
   MeetAltitudeSelector altitude_selector;
   CoarseCostEvaluator cost_evaluator;
   GlobalSelector global_selector;
 
-  Mode0FixedSpeedSearcher::Dependencies deps;
+  Mode1FixedSpeedSearcher::Dependencies deps;
   deps.tanker_speed_discretizer = &tanker_speed_discretizer;
   deps.combo_generator = &combo_generator;
   deps.candidate_generator = &candidate_generator;
-  deps.loop_calculator = &loop_calculator;
   deps.altitude_selector = &altitude_selector;
   deps.cost_evaluator = &cost_evaluator;
   deps.global_selector = &global_selector;
 
-  Mode0FixedSpeedSearcher searcher(deps);
+  Mode1FixedSpeedSearcher searcher(deps);
 
   refuel::PlanningContext ctx;
 
@@ -449,10 +450,10 @@ bool Test_Mode0_EndToEnd_RealImpl_MinimalFeasible() {
   refuel::AircraftConfig r;
   r.id = "R1";
   r.initial_position_xy = {0.0, 0.0, 0.0};
-  r.initial_position_lla.alt_m = 6000.0; // 白框 5 会用到
+  r.initial_position_lla.alt_m = 6000.0; // 白框 5 会优先使用
   ctx.receivers = {r};
 
-  // --- receiver bounds：允许 meet_tas=vt
+  // --- receiver bounds：允许 meet_tas=vt，且 vr=vt 合法
   refuel::SpeedBounds rb;
   rb.min_speed_mps = 80.0;
   rb.cruise_speed_mps = 100.0;
@@ -466,25 +467,22 @@ bool Test_Mode0_EndToEnd_RealImpl_MinimalFeasible() {
   };
   ctx.racetrack.radius_m = 1000.0;
   ctx.racetrack.length_m = 0.0;
-  ctx.racetrack.speed_mps = 0.0;     // 让 loop speed 优先走 receiver cruise
+  ctx.racetrack.speed_mps = 0.0;
   ctx.racetrack.altitude_m = 5000.0; // fallback 高度（本例不会用到，因为 receiver 初始高度=6000）
 
-  // receiver 候选速度：给足够的离散点
-  std::vector<double> receiver_candidates{90.0, 100.0, 110.0};
-
-  BestGlobalResult best = searcher.Solve(ctx, Preference::kMinFuel, receiver_candidates);
+  BestGlobalResult best = searcher.Solve(ctx, Preference::kMinFuel);
 
   REFUEL_EXPECT_TRUE(best.feasible);
 
-  // 在最小实现里：meet_tas = vt；且 cost 以时间/燃油粗估，通常 vt 越大越优（距离固定）
+  // fuel/time 都随 vt 增大而下降（距离固定，mode1 同时到达）
   REFUEL_EXPECT_EQ(best.best.tanker_tas_mps, 110.0);
 
   REFUEL_EXPECT_TRUE(!best.best.combo.choices.empty());
   // 进入点应选更近的第 0 个
   REFUEL_EXPECT_EQ(best.best.combo.choices.front().entrypoint_idx, 0);
 
-  // vt=110 时，FeasibleCandidateGenerator 会过滤掉 vr<vt，所以只剩 vr=110
-  REFUEL_EXPECT_EQ(best.best.best.receiver_tas_mps, 110.0);
+  // mode1 解 vr：在本例中 receiver_dist==tanker_dist => vr==vt
+  REFUEL_EXPECT_NEAR(best.best.best.receiver_tas_mps, 110.0, 1e-6);
 
   // 白框 5：会合高度取 receiver 初始高度
   REFUEL_EXPECT_EQ(best.best.best.meet_altitude_m, 6000.0);
@@ -496,30 +494,29 @@ bool Test_Mode0_EndToEnd_RealImpl_MinimalFeasible() {
 }
 
 // =========================
-// 10) 仍保留：带 Fake 的集成测试（验证两层循环/调用次数/组合内选优/全局选优）
-// 注意：这部分不依赖真实算法细节，属于“结构回归测试”。
+// 9) 结构回归测试：带 Fake 的集成测试（验证两层循环/调用次数/组合内选优/全局选优）
 // =========================
 
-struct FakeDiscretizer : public refuel::mode0::TankerSpeedDiscretizer {
+struct FakeDiscretizer : public refuel::mode1::TankerSpeedDiscretizer {
   mutable int called = 0;
-  refuel::mode0::TankerSpeedCandidates Discretize(const refuel::PlanningContext&) const override {
+  refuel::mode1::TankerSpeedCandidates Discretize(const refuel::PlanningContext&) const override {
     called++;
-    refuel::mode0::TankerSpeedCandidates out;
+    refuel::mode1::TankerSpeedCandidates out;
     out.tanker_tas_mps = {100.0, 200.0};
     return out;
   }
 };
 
-struct FakeComboGenerator : public refuel::mode0::EntryPointComboGenerator {
+struct FakeComboGenerator : public refuel::mode1::EntryPointComboGenerator {
   mutable int called = 0;
-  refuel::mode0::EntryPointCombos Generate(const refuel::PlanningContext&) const override {
+  refuel::mode1::EntryPointCombos Generate(const refuel::PlanningContext&) const override {
     called++;
-    refuel::mode0::EntryPointCombos out;
+    refuel::mode1::EntryPointCombos out;
 
-    refuel::mode0::EntryPointCombo comboA;
+    refuel::mode1::EntryPointCombo comboA;
     comboA.choices.push_back({"R1", 0});
 
-    refuel::mode0::EntryPointCombo comboB;
+    refuel::mode1::EntryPointCombo comboB;
     comboB.choices.push_back({"R1", 1});
 
     out.combos = {comboA, comboB};
@@ -527,57 +524,42 @@ struct FakeComboGenerator : public refuel::mode0::EntryPointComboGenerator {
   }
 };
 
-struct FakeCandidateGenerator : public refuel::mode0::FeasibleCandidateGenerator {
+struct FakeCandidateGenerator : public refuel::mode1::FeasibleCandidateGenerator {
   mutable int called = 0;
 
-  std::vector<refuel::mode0::MeetingCandidate> Generate(
-      const refuel::PlanningContext&, double tanker_tas, const refuel::mode0::EntryPointCombo& combo,
-      const std::vector<double>& receiver_candidates) const override {
+  std::vector<refuel::mode1::MeetingCandidate> Generate(
+      const refuel::PlanningContext&, double tanker_tas, const refuel::mode1::EntryPointCombo& combo) const override {
     called++;
-    std::vector<refuel::mode0::MeetingCandidate> out;
-    if (receiver_candidates.empty()) return out;
+
+    std::vector<refuel::mode1::MeetingCandidate> out;
 
     const int combo_id = combo.choices.empty() ? 0 : combo.choices.front().entrypoint_idx;
 
-    for (double vr : receiver_candidates) {
-      refuel::mode0::MeetingCandidate c;
+    // 返回两个候选（模拟“在 combo 内部选优”）
+    for (double vr : {10.0, 20.0}) {
+      refuel::mode1::MeetingCandidate c;
       c.feasible = true;
       c.receiver_tas_mps = vr;
 
       // 用 meet_tas 编码 combo_id（仅测试）
       c.meet_tas_mps = 10000.0 + combo_id;
 
-      // 用 tanker_tas/vr 构造可重复的“时间差”
+      // 用 tanker_tas/vr 构造可重复的“时间”
       c.tanker_arrive_time_s = tanker_tas;
       c.receiver_arrive_time_s = vr;
+      c.receiver_arrive_time_adjusted_s = vr;
       c.delta_t_s = c.receiver_arrive_time_s - c.tanker_arrive_time_s;
 
       out.push_back(c);
     }
+
     return out;
   }
 };
 
-struct FakeLoopCalculator : public refuel::mode0::HoldingLoopCalculator {
+struct FakeAltitudeSelector : public refuel::mode1::MeetAltitudeSelector {
   mutable int called = 0;
-  void Apply(std::vector<refuel::mode0::MeetingCandidate>& cands, double loop_period_s) const override {
-    called++;
-    for (auto& c : cands) {
-      if (!c.feasible) continue;
-      if (c.delta_t_s >= 0) {
-        c.n_loops = 0;
-        c.receiver_arrive_time_adjusted_s = c.receiver_arrive_time_s;
-      } else {
-        c.n_loops = static_cast<int>(std::ceil((-c.delta_t_s) / loop_period_s));
-        c.receiver_arrive_time_adjusted_s = c.receiver_arrive_time_s + c.n_loops * loop_period_s;
-      }
-    }
-  }
-};
-
-struct FakeAltitudeSelector : public refuel::mode0::MeetAltitudeSelector {
-  mutable int called = 0;
-  void Apply(std::vector<refuel::mode0::MeetingCandidate>& cands,
+  void Apply(std::vector<refuel::mode1::MeetingCandidate>& cands,
              const refuel::PlanningContext&, const std::string&) const override {
     called++;
     for (auto& c : cands) {
@@ -589,22 +571,22 @@ struct FakeAltitudeSelector : public refuel::mode0::MeetAltitudeSelector {
   }
 };
 
-struct FakeCostEvaluator : public refuel::mode0::CoarseCostEvaluator {
+struct FakeCostEvaluator : public refuel::mode1::CoarseCostEvaluator {
   mutable int called = 0;
 
-  std::optional<refuel::mode0::MeetingCandidate> PickBest(
-      std::vector<refuel::mode0::MeetingCandidate>& cands,
+  std::optional<refuel::mode1::MeetingCandidate> PickBest(
+      std::vector<refuel::mode1::MeetingCandidate>& cands,
       const refuel::PlanningContext&, Preference pref) const override {
     called++;
 
     double best_cost = std::numeric_limits<double>::infinity();
-    std::optional<refuel::mode0::MeetingCandidate> best;
+    std::optional<refuel::mode1::MeetingCandidate> best;
 
     for (auto& c : cands) {
       if (!c.feasible) continue;
       const int combo_id = static_cast<int>(std::round(c.meet_tas_mps - 10000.0));
 
-      // 构造确定性 cost
+      // 构造确定性 cost（与 mode0 的 fake 测试一致）
       c.total_fuel = c.tanker_arrive_time_s + c.receiver_tas_mps + 1000.0 * combo_id;
       c.total_time = (c.tanker_arrive_time_s * 2.0) + c.receiver_tas_mps + 1000.0 * combo_id;
       c.cost = (pref == Preference::kMinFuel) ? c.total_fuel : c.total_time;
@@ -614,48 +596,45 @@ struct FakeCostEvaluator : public refuel::mode0::CoarseCostEvaluator {
         best = c;
       }
     }
+
     return best;
   }
 };
 
-struct FakeGlobalSelector : public refuel::mode0::GlobalSelector {
+struct FakeGlobalSelector : public refuel::mode1::GlobalSelector {
   mutable int called = 0;
-  refuel::mode0::BestGlobalResult Select(const std::vector<refuel::mode0::BestUnderTankerSpeed>& all,
+  refuel::mode1::BestGlobalResult Select(const std::vector<refuel::mode1::BestUnderTankerSpeed>& all,
                                          Preference pref) const override {
     called++;
-    return refuel::mode0::GlobalSelector::Select(all, pref);
+    return refuel::mode1::GlobalSelector::Select(all, pref);
   }
 };
 
-bool Test_Mode0_Integration_WithFakes() {
-  using namespace refuel::mode0;
+bool Test_Mode1_Integration_WithFakes() {
+  using namespace refuel::mode1;
 
   FakeDiscretizer discretizer;
   FakeComboGenerator combo_generator;
   FakeCandidateGenerator cand_generator;
-  FakeLoopCalculator loop_calculator;
   FakeAltitudeSelector altitude_selector;
   FakeCostEvaluator cost_evaluator;
   FakeGlobalSelector global_selector;
 
-  Mode0FixedSpeedSearcher::Dependencies deps;
+  Mode1FixedSpeedSearcher::Dependencies deps;
   deps.tanker_speed_discretizer = &discretizer;
   deps.combo_generator = &combo_generator;
   deps.candidate_generator = &cand_generator;
-  deps.loop_calculator = &loop_calculator;
   deps.altitude_selector = &altitude_selector;
   deps.cost_evaluator = &cost_evaluator;
   deps.global_selector = &global_selector;
 
-  Mode0FixedSpeedSearcher searcher(deps);
+  Mode1FixedSpeedSearcher searcher(deps);
 
   refuel::PlanningContext ctx;
 
-  std::vector<double> receiver_candidates{10.0, 20.0};
-
   // 期望（pref=fuel）：
   // vt=100, combo_id=0, receiver=10 => cost=110 最小
-  BestGlobalResult best = searcher.Solve(ctx, Preference::kMinFuel, receiver_candidates);
+  BestGlobalResult best = searcher.Solve(ctx, Preference::kMinFuel);
 
   REFUEL_EXPECT_TRUE(best.feasible);
   REFUEL_EXPECT_EQ(best.best.tanker_tas_mps, 100.0);
@@ -668,7 +647,6 @@ bool Test_Mode0_Integration_WithFakes() {
   REFUEL_EXPECT_EQ(discretizer.called, 1);
   REFUEL_EXPECT_EQ(combo_generator.called, 1);
   REFUEL_EXPECT_EQ(cand_generator.called, 4);
-  REFUEL_EXPECT_EQ(loop_calculator.called, 4);
   REFUEL_EXPECT_EQ(altitude_selector.called, 4);
   REFUEL_EXPECT_EQ(cost_evaluator.called, 4);
   REFUEL_EXPECT_EQ(global_selector.called, 1);
@@ -686,14 +664,13 @@ int main() {
 
       {"[Box1] TankerSpeedDiscretizer basic", Test_TankerSpeedDiscretizer_Basic},
       {"[Box2] EntryPointComboGenerator topK & cartesian", Test_EntryPointComboGenerator_TopKAndCartesian},
-      {"[Box3] FeasibleCandidateGenerator bounds & delta", Test_FeasibleCandidateGenerator_BoundsAndDelta},
-      {"[Box4] HoldingLoopCalculator min loops", Test_HoldingLoopCalculator_MinLoops},
+      {"[Box3] FeasibleCandidateGenerator solve vr & bounds", Test_FeasibleCandidateGenerator_SolveVrAndBounds},
       {"[Box5] MeetAltitudeSelector uses initial alt/fallback", Test_MeetAltitudeSelector_UsesInitialAltOrFallback},
       {"[Box6] CoarseCostEvaluator pref affects choice", Test_CoarseCostEvaluator_PrefAffectsChoice},
 
-      {"Mode0 smoke test (no crash on empty ctx)", Test_Mode0_Smoke_NoCrashOnEmptyCtx},
-      {"Mode0 end-to-end (real impl, minimal feasible)", Test_Mode0_EndToEnd_RealImpl_MinimalFeasible},
-      {"Mode0 integration test (with fakes)", Test_Mode0_Integration_WithFakes},
+      {"Mode1 smoke test (no crash on empty ctx)", Test_Mode1_Smoke_NoCrashOnEmptyCtx},
+      {"Mode1 end-to-end (real impl, minimal feasible)", Test_Mode1_EndToEnd_RealImpl_MinimalFeasible},
+      {"Mode1 integration test (with fakes)", Test_Mode1_Integration_WithFakes},
   };
 
   return refuel::test::RunAll(cases);

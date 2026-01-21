@@ -29,11 +29,23 @@ target_include_directories(refuel_demo PRIVATE include)
 
 if(REFUEL_BUILD_TESTS)
   enable_testing()
-
+  # -------------------------
+  # Mode0 tests
+  # -------------------------
   add_executable(refuel_mode0_tests
       tests/mode0_tests.cpp
   )
   target_include_directories(refuel_mode0_tests PRIVATE include .)
 
   add_test(NAME refuel_mode0_tests COMMAND refuel_mode0_tests)
+
+  # -------------------------
+  # Mode1 tests
+  # -------------------------
+  add_executable(refuel_mode1_tests
+      tests/mode1_tests.cpp
+  )
+  target_include_directories(refuel_mode1_tests PRIVATE include .)
+  add_test(NAME refuel_mode1_tests COMMAND refuel_mode1_tests)
 endif()
+
