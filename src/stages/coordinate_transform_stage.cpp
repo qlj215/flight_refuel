@@ -16,31 +16,27 @@ namespace {
 // 你可以：
 // 1) 直接替换为你项目已有的坐标转换；或
 // 2) 采用 WebMercator/UTM/ENU 等任意一致坐标系。
-static Vec3 LLA2XY_Stub(const LLA& lla) {
-  Vec3 xy{};
-  (void)lla;
-
-  // ===== 示例（若你确定就是 WebMercator，可以取消注释）=====
-  // constexpr double R = 6378137.0;
-  // const double lat = lla.lat_deg * M_PI / 180.0;
-  // const double lon = lla.lon_deg * M_PI / 180.0;
-  // xy.x = R * lon;
-  // xy.y = R * std::log(std::tan(M_PI/4.0 + lat/2.0));
-  // xy.z = lla.alt_m;
-  // =========================================================
-
+static Vec3 LLA2XY(const LLA& lla) {
+  constexpr double R = 6378137.0;
+  const double lat = lla.lat_deg * M_PI / 180.0;
+  const double lon = lla.lon_deg * M_PI / 180.0;
+  Vec3 xy;
+  xy.x = R * lon;
+  xy.y = R * std::log(std::tan(M_PI/4.0 + lat/2.0));
+  xy.z = lla.alt_m;
   return xy;
 }
+
 
 } // namespace
 
 void CoordinateTransformStage::Run(PlanningContext& ctx) {
   // 1) tanker 初始位置
-  ctx.tanker.initial_position_xy = LLA2XY_Stub(ctx.tanker.initial_position_lla);
+  ctx.tanker.initial_position_xy = LLA2XY(ctx.tanker.initial_position_lla);
 
   // 2) receivers 初始位置
   for (auto& r : ctx.receivers) {
-    r.initial_position_xy = LLA2XY_Stub(r.initial_position_lla);
+    r.initial_position_xy = LLA2XY(r.initial_position_lla);
   }
 
   // 3) 安全区顶点坐标转换（这里“只演示接口”）

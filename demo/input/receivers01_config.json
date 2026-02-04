@@ -710,6 +710,7 @@
     },
     "current_status": {
         "fuel_kg": 3731.9,
+        "max_fuel_kg":7000,
         "heading_deg":90,
         "speed_mps": 160,
         "priority":0,
@@ -1426,7 +1427,7 @@
     },
     "initial_position": {
         "altitude": 5000,
-        "latitude": 29.192483,
+        "latitude": 28.397728,
         "longitude": 116.140339
     },
     "performance_limits": {

@@ -1,15 +1,15 @@
 {
   "racetrack": {
     "length": 0,
-    "radius": 5000,
+    "radius": 3973.95,
     "orientation_deg": 0,
-    "altitude_m": 7000,
-    "speed": 130
+    "altitude_m": 5000,
+    "speed": 150
   },
   "tanker": {
     "meeting_altitude_m": 5000,
-    "speed": 120,
-    "entry_point": [5000.00, 0.00],
+    "speed": 150,
+    "entry_point": [13352682.26, 3411169.92],
     "entry_direction_deg": 90.00,
     "arrival_time_s": 0.00,
     "fuel_consumed": 0.00
@@ -18,9 +18,9 @@
     "RE001": {
       "sequence": 1,
       "meeting_altitude_m": 5000.00,
-      "speed": 120.00,
-      "coordinate": [5000.00, 0.00],
-      "waiting_point": [5000.00, 0.00],
+      "speed": 170.00,
+      "coordinate": [13344734.36, 3411169.92],
+      "waiting_point": [13344734.36, 3411169.92],
       "cycling_number": 0,
       "arrival_time_s": 0.00,
       "fuel_consumed": 0.00
@@ -28,9 +28,9 @@
     "RE002": {
       "sequence": 2,
       "meeting_altitude_m": 5000.00,
-      "speed": 120.00,
-      "coordinate": [5000.00, 0.00],
-      "waiting_point": [5000.00, 0.00],
+      "speed": 170.00,
+      "coordinate": [13344734.36, 3411169.92],
+      "waiting_point": [13344734.36, 3411169.92],
       "cycling_number": 0,
       "arrival_time_s": 0.00,
       "fuel_consumed": 0.00
@@ -38,9 +38,9 @@
     "RE003": {
       "sequence": 3,
       "meeting_altitude_m": 5000.00,
-      "speed": 120.00,
-      "coordinate": [5000.00, 0.00],
-      "waiting_point": [5000.00, 0.00],
+      "speed": 170.00,
+      "coordinate": [13344734.36, 3411169.92],
+      "waiting_point": [13344734.36, 3411169.92],
       "cycling_number": 0,
       "arrival_time_s": 0.00,
       "fuel_consumed": 0.00

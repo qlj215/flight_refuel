@@ -710,6 +710,7 @@
     },
     "current_status": {
         "fuel_kg": 3731.9,
+        "max_fuel_kg":7000,
         "heading_deg": 0,
         "speed_mps": 155,
         "priority":0,

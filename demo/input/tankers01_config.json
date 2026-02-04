@@ -1432,7 +1432,8 @@
         "climb_rate": 10,
         "descent_rate": 5,
         "max_altitude": 10000,
-        "max_bank_angle": 30
+        "max_bank_angle": 30,
+        "fuel_transfer_speed":25
     },
     "tanker_id": "TK001",
     "tanker_type": "KC-135"

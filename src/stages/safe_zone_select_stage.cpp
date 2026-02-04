@@ -7,11 +7,17 @@ namespace refuel {
 namespace {
 
 // TODO：使用与你项目一致的坐标转换（建议复用 CoordinateTransformStage 的实现）
-static Vec3 LLA2XY_Stub(const LLA& lla) {
-  Vec3 xy{};
-  (void)lla;
+static Vec3 LLA2XY(const LLA& lla) {
+  constexpr double R = 6378137.0;
+  const double lat = lla.lat_deg * M_PI / 180.0;
+  const double lon = lla.lon_deg * M_PI / 180.0;
+  Vec3 xy;
+  xy.x = R * lon;
+  xy.y = R * std::log(std::tan(M_PI/4.0 + lat/2.0));
+  xy.z = lla.alt_m;
   return xy;
 }
+
 
 } // namespace
 
@@ -33,7 +39,7 @@ void SafeZoneSelectStage::Run(PlanningContext& ctx) {
   // 将选中安全区顶点从 LLA 转为 XY
   Polygon poly;
   for (const auto& v : safe.zones_vertices_lla.at(chosen)) {
-    poly.vertices_xy.push_back(LLA2XY_Stub(v));
+    poly.vertices_xy.push_back(LLA2XY(v));
   }
   ctx.safe_zone_selected.safe_zone_polygon_xy = std::move(poly);
 }

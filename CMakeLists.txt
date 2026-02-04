@@ -23,10 +23,12 @@ add_executable(refuel_demo
     src/stages/rendezvous_stage.cpp
     src/stages/path_planning_stage.cpp
     src/stages/cost_stage.cpp
+    src/stages/route_planner.cpp
+    src/stages/racetrack.cpp
 )
 
 target_include_directories(refuel_demo PRIVATE include)
-
+target_include_directories(refuel_demo PRIVATE include/common)
 if(REFUEL_BUILD_TESTS)
   enable_testing()
   # -------------------------
