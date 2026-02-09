@@ -17,7 +17,7 @@ namespace {
 // 1) 直接替换为你项目已有的坐标转换；或
 // 2) 采用 WebMercator/UTM/ENU 等任意一致坐标系。
 static Vec3 LLA2XY(const LLA& lla) {
-  constexpr double R = 6378137.0;
+  constexpr double R = 6371000.0;
   const double lat = lla.lat_deg * M_PI / 180.0;
   const double lon = lla.lon_deg * M_PI / 180.0;
   Vec3 xy;

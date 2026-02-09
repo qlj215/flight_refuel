@@ -9,7 +9,7 @@
   "tanker": {
     "meeting_altitude_m": 5000,
     "speed": 150,
-    "entry_point": [13352682.26, 3411169.92],
+    "entry_point": [13337745.34, 3407352.89],
     "entry_direction_deg": 90.00,
     "arrival_time_s": 0.00,
     "fuel_consumed": 0.00
@@ -19,8 +19,8 @@
       "sequence": 1,
       "meeting_altitude_m": 5000.00,
       "speed": 170.00,
-      "coordinate": [13344734.36, 3411169.92],
-      "waiting_point": [13344734.36, 3411169.92],
+      "coordinate": [13329797.44, 3407352.89],
+      "waiting_point": [13329797.44, 3407352.89],
       "cycling_number": 0,
       "arrival_time_s": 0.00,
       "fuel_consumed": 0.00
@@ -29,8 +29,8 @@
       "sequence": 2,
       "meeting_altitude_m": 5000.00,
       "speed": 170.00,
-      "coordinate": [13344734.36, 3411169.92],
-      "waiting_point": [13344734.36, 3411169.92],
+      "coordinate": [13329797.44, 3407352.89],
+      "waiting_point": [13329797.44, 3407352.89],
       "cycling_number": 0,
       "arrival_time_s": 0.00,
       "fuel_consumed": 0.00
@@ -39,8 +39,8 @@
       "sequence": 3,
       "meeting_altitude_m": 5000.00,
       "speed": 170.00,
-      "coordinate": [13344734.36, 3411169.92],
-      "waiting_point": [13344734.36, 3411169.92],
+      "coordinate": [13329797.44, 3407352.89],
+      "waiting_point": [13329797.44, 3407352.89],
       "cycling_number": 0,
       "arrival_time_s": 0.00,
       "fuel_consumed": 0.00

@@ -49,5 +49,26 @@ if(REFUEL_BUILD_TESTS)
   )
   target_include_directories(refuel_mode1_tests PRIVATE include .)
   add_test(NAME refuel_mode1_tests COMMAND refuel_mode1_tests)
+
+  # -------------------------
+  # Stage-by-stage tests
+  # -------------------------
+  add_executable(refuel_stage_tests
+      tests/stages_tests.cpp
+      src/pipeline/pipeline.cpp
+      src/stages/coordinate_transform_stage.cpp
+      src/stages/preprocess_stage.cpp
+      src/stages/safe_zone_select_stage.cpp
+      src/stages/racetrack_build_stage.cpp
+      src/stages/sequence_stage.cpp
+      src/stages/tanker_racetrack_decision_stage.cpp
+      src/stages/rendezvous_stage.cpp
+      src/stages/path_planning_stage.cpp
+      src/stages/cost_stage.cpp
+      src/stages/route_planner.cpp
+      src/stages/racetrack.cpp
+  )
+  target_include_directories(refuel_stage_tests PRIVATE include .)
+  add_test(NAME refuel_stage_tests COMMAND refuel_stage_tests)
 endif()
 
