@@ -1,0 +1,144 @@
+[
+  {
+    "mission_id": "RF-01",
+    "creation_time": "2025-04-06 12:00:00",
+    "units": {
+      "tanker_id": "TK001",
+      "receiver_id": "RE001 RE002 RE003"
+    },
+    "refuel_mode": {
+      "mode_type": 0,
+      "timing_params": {
+        "sub_mode": "dingdian",
+        "designated_time": "14:30:00",
+        "safe_zone": {
+          "is_defined": true,
+          "zones":[
+            {
+              "safe_zone_id": 1,
+              "vertices":[
+                [
+                  31.0,
+                  118.0
+                ],
+                [
+                  31.0,
+                  120.6
+                ],
+                [
+                  31.9,
+                  120.6
+                ],
+                [
+                  31.9,
+                  118.0
+                ]
+              ]
+            },
+            {
+              "safe_zone_id": 2,
+              "vertices":[
+                [
+                  32.0,
+                  117.0
+                ],
+                [
+                  32.0,
+                  119.6
+                ],
+                [
+                  32.9,
+                  119.6
+                ],
+                [
+                  32.9,
+                  117.0
+                ]
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "optimization_prefs": {
+      "primary_pref": 4,
+      "secondary_pref": 2,
+      "weight_factors": [
+        0.5,
+        0.5,
+        0.0
+      ]
+    },
+    "racetrack": {
+      "turn_direction": "counterclockwise",
+      "angle": 30,
+      "altitude": 7000,
+      "speed": 130
+    },
+    "holding_zone": {
+      "entry_rules": {
+        "speed_limit": 200,
+        "altitude_range": [
+          5000,
+          10000
+        ],
+        "orbit_radius": 5000
+      },
+      "stacking_rules": {
+        "stacking_interval": 92600,
+        "communication_freq": 121.5
+      },
+      "exit_rules": {
+        "distance_to_rendezvous": 2000,
+        "exit_speed": 130,
+        "climb_gradient": 0
+      }
+    },
+    "safe_corridors": [
+    ],
+    "operation_area": {
+      "boundary": [
+        [
+          25.0,
+          110.0
+        ],
+        [
+          25.0,
+          125.0
+        ],
+        [
+          35.0,
+          125.0
+        ],
+        [
+          35.0,
+          110.0
+        ]
+      ],
+      "altitude_limits": [
+        3000,
+        12000
+      ],
+      "no_fly_zones": {
+        "vertices": [
+          [
+            29.5,
+            117.0
+          ],
+          [
+            29.5,
+            117.1
+          ],
+          [
+            29.3,
+            117.1
+          ],
+          [
+            29.3,
+            117.0
+          ]
+        ]
+      }
+    }
+  }
+]

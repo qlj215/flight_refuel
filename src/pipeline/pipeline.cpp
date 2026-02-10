@@ -29,8 +29,37 @@ Pipeline::Pipeline() {
 }
 
 void Pipeline::Run(PlanningContext& ctx) {
-  for (auto& stage : stages_) {
-    stage->Run(ctx);
+  // Stage index mapping (must match Pipeline::Pipeline() order)
+  constexpr std::size_t kSafe    = 2;
+  constexpr std::size_t kRtBuild = 3;
+  constexpr std::size_t kSeq     = 4;
+  constexpr std::size_t kTanker  = 5;
+  constexpr std::size_t kRendez  = 6;
+
+  // 1) Run up to (and including) “加油机是否在跑马场上/是否需要转移”判定
+  for (std::size_t i = 0; i < stages_.size(); ++i) {
+    stages_[i]->Run(ctx);
+
+    if (i == kTanker) {
+      // 2) 若“在跑马场上且需要转移”，则按新流程回退到
+      //    “不在跑马场 -> 是否划分安全区 -> 跑马场建立 -> 确定加油顺序”
+      if (ctx.tanker_rt_decision.tanker_on_racetrack && ctx.tanker_rt_decision.need_transfer) {
+        stages_[kSafe]->Run(ctx);
+        stages_[kRtBuild]->Run(ctx);
+        stages_[kSeq]->Run(ctx);
+
+        // 3) 回退后不再做第二次“是否在跑马场”判断
+        //    直接视为“不在跑马场/不启用减会合策略”
+        ctx.tanker_rt_decision.tanker_on_racetrack = false;
+        ctx.tanker_rt_decision.reduce_rendezvous = false;
+      }
+
+      // 4) 从 Rendezvous 起点继续跑（避免再次跑 Safe/Racetrack/Seq/Tanker 判断）
+      for (std::size_t j = kRendez; j < stages_.size(); ++j) {
+        stages_[j]->Run(ctx);
+      }
+      return;
+    }
   }
 }
 

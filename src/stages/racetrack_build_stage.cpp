@@ -376,6 +376,7 @@ static racetrack::Vec2 ComputeReceiversCentroid(const std::vector<racetrack::Vec
 static void BuildEntryPoints(const racetrack::Outputs& out,
                              double altitude_m,
                              std::vector<refuel::Vec3>& entrypoints_xy) {
+
   entrypoints_xy.clear();
 
   const double L = out.L;
@@ -413,32 +414,64 @@ static void BuildEntryPoints(const racetrack::Outputs& out,
     return;
   }
 
-  // Segment endpoints on centerline
+
+  auto floor_to_thousand = [](double v) -> double {
+    return std::floor(v / 1000.0) * 1000.0;
+  };
+
+  auto push_floor_unique = [&](double x, double y) {
+    x = floor_to_thousand(x);
+    y = floor_to_thousand(y);
+    push_unique(x, y);
+  };
+
+  // centerline endpoints
   const double ax = cx - ux * (L / 2.0);
   const double ay = cy - uy * (L / 2.0);
   const double bx = cx + ux * (L / 2.0);
   const double by = cy + uy * (L / 2.0);
 
-  // 1) Tangency points where straights meet semicircles (common merge points)
-  push_unique(ax + vx * R, ay + vy * R);
-  push_unique(ax - vx * R, ay - vy * R);
-  push_unique(bx + vx * R, by + vy * R);
-  push_unique(bx - vx * R, by - vy * R);
+  // two offset segments: +vR and -vR
+  struct P2 { double x, y; };
 
-  // 2) Midpoints of the two straight boundaries
-  push_unique(cx + vx * R, cy + vy * R);
-  push_unique(cx - vx * R, cy - vy * R);
+  P2 pA_plus  { ax + vx * R, ay + vy * R };
+  P2 pB_plus  { bx + vx * R, by + vy * R };
+  P2 pA_minus { ax - vx * R, ay - vy * R };
+  P2 pB_minus { bx - vx * R, by - vy * R };
 
-  // 3) Quarters along both straights to offer more candidates
-  const double t = 0.25 * L;
-  push_unique(cx - ux * t + vx * R, cy - uy * t + vy * R);
-  push_unique(cx + ux * t + vx * R, cy + uy * t + vy * R);
-  push_unique(cx - ux * t - vx * R, cy - uy * t - vy * R);
-  push_unique(cx + ux * t - vx * R, cy + uy * t - vy * R);
+  // decide which is top/bottom by average y (水平放时非常稳)
+  const double y_plus  = 0.5 * (pA_plus.y  + pB_plus.y);
+  const double y_minus = 0.5 * (pA_minus.y + pB_minus.y);
 
-  // 4) Outer-most points on the two semicircles
-  push_unique(ax - ux * R, ay - uy * R);
-  push_unique(bx + ux * R, by + uy * R);
+  P2 top1, top2, bot1, bot2;
+  if (y_plus >= y_minus) {
+    top1 = pA_plus;  top2 = pB_plus;
+    bot1 = pA_minus; bot2 = pB_minus;
+  } else {
+    top1 = pA_minus; top2 = pB_minus;
+    bot1 = pA_plus;  bot2 = pB_plus;
+  }
+
+  // bottom: start at left-lower (smaller x), go left -> right
+  P2 bot_start = (bot1.x <= bot2.x) ? bot1 : bot2;
+  P2 bot_end   = (bot1.x <= bot2.x) ? bot2 : bot1;
+
+  // top: start at right-upper (larger x), go right -> left
+  P2 top_start = (top1.x >= top2.x) ? top1 : top2;
+  P2 top_end   = (top1.x >= top2.x) ? top2 : top1;
+
+  // generate 3 points each: t=0,1/3,2/3 (include start, exclude end)
+  for (int k = 0; k < 3; ++k) {
+    const double t = static_cast<double>(k) / 3.0;
+    push_floor_unique(bot_start.x + (bot_end.x - bot_start.x) * t,
+                      bot_start.y + (bot_end.y - bot_start.y) * t);
+  }
+  for (int k = 0; k < 3; ++k) {
+    const double t = static_cast<double>(k) / 3.0;
+    push_floor_unique(top_start.x + (top_end.x - top_start.x) * t,
+                      top_start.y + (top_end.y - top_start.y) * t);
+  }
+
 }
 
 

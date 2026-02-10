@@ -11,8 +11,8 @@ int main(int argc, char** argv) {
   //   ./refuel_demo
   // 或指定路径：
   //   ./refuel_demo /path/to/demo/input /path/to/demo/output
-  std::string input_dir  = "demo/input";
-  std::string output_dir = "demo/output";
+  std::string input_dir  = "demo/input/0210";
+  std::string output_dir = "demo/output/0210";
 
   if (argc >= 2) input_dir = argv[1];
   if (argc >= 3) output_dir = argv[2];
