@@ -1,0 +1,12 @@
+{
+  "generated_tankers": [
+    "TK001",
+    "TK002"
+  ],
+  "generated_receivers": [
+    "RE001",
+    "RE002",
+    "RE003"
+  ],
+  "assignment_count": 2
+}

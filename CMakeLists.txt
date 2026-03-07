@@ -70,5 +70,27 @@ if(REFUEL_BUILD_TESTS)
   )
   target_include_directories(refuel_stage_tests PRIVATE include .)
   add_test(NAME refuel_stage_tests COMMAND refuel_stage_tests)
+
+  # -------------------------
+  # Many-to-many branch tests
+  # -------------------------
+  add_executable(refuel_many_to_many_tests
+      tests/many_to_many_tests.cpp
+      src/io/demo_io.cpp
+      src/pipeline/pipeline.cpp
+      src/stages/coordinate_transform_stage.cpp
+      src/stages/preprocess_stage.cpp
+      src/stages/safe_zone_select_stage.cpp
+      src/stages/racetrack_build_stage.cpp
+      src/stages/sequence_stage.cpp
+      src/stages/tanker_racetrack_decision_stage.cpp
+      src/stages/rendezvous_stage.cpp
+      src/stages/path_planning_stage.cpp
+      src/stages/cost_stage.cpp
+      src/stages/route_planner.cpp
+      src/stages/racetrack.cpp
+  )
+  target_include_directories(refuel_many_to_many_tests PRIVATE include include/common .)
+  add_test(NAME refuel_many_to_many_tests COMMAND refuel_many_to_many_tests)
 endif()
 
