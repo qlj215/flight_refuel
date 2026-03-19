@@ -16,8 +16,20 @@ namespace refuel {
 namespace {
 
 static constexpr double kPi = 3.14159265358979323846;
+static constexpr double kEarthRadiusM = 6378137.0;
 
 inline double Deg2Rad(double deg) { return deg * kPi / 180.0; }
+
+inline double NormalizeRad(double a) {
+  while (a <= -kPi) a += 2.0 * kPi;
+  while (a > kPi) a -= 2.0 * kPi;
+  return a;
+}
+
+// Navigation heading (0°=North, clockwise positive) -> math heading (0°=+X/East, CCW positive)
+inline double NavHeadingDegToMathRad(double nav_deg) {
+  return NormalizeRad(Deg2Rad(90.0 - nav_deg));
+}
 
 inline double ClampMin(double v, double lo) { return (v < lo) ? lo : v; }
 
@@ -61,6 +73,32 @@ std::vector<WaypointXYZ> SampleStraightLine(const WaypointXYZ& start, const Wayp
   for (int i = 0; i <= n; ++i) {
     const double u = static_cast<double>(i) / static_cast<double>(n);
     out.push_back({start.x + u * dx, start.y + u * dy, start.z + u * dz});
+  }
+  return out;
+}
+
+routeplan::Vec2 LLA2XY_3857(const LLA& lla) {
+  const double lat = lla.lat_deg * kPi / 180.0;
+  const double lon = lla.lon_deg * kPi / 180.0;
+  return routeplan::Vec2{
+      kEarthRadiusM * lon,
+      kEarthRadiusM * std::log(std::tan(kPi / 4.0 + lat / 2.0))};
+}
+
+std::vector<std::vector<routeplan::Vec2>> BuildNoFlyObstaclePolygons(const PlanningContext& ctx) {
+  std::vector<std::vector<routeplan::Vec2>> out;
+  const auto& nf = ctx.mission.operation_area.no_fly_zones;
+  if (!nf.is_defined) return out;
+
+  out.reserve(nf.zones_vertices_lla.size());
+  for (const auto& poly_lla : nf.zones_vertices_lla) {
+    if (poly_lla.size() < 3) continue;
+    std::vector<routeplan::Vec2> poly_xy;
+    poly_xy.reserve(poly_lla.size());
+    for (const auto& p : poly_lla) {
+      poly_xy.push_back(LLA2XY_3857(p));
+    }
+    if (poly_xy.size() >= 3) out.push_back(std::move(poly_xy));
   }
   return out;
 }
@@ -192,20 +230,22 @@ double HeadingAtIndexRad(const std::vector<WaypointXYZ>& loop, std::size_t idx) 
   return std::atan2(dy, dx);
 }
 
-std::vector<WaypointXYZ> PlanTransferWithRoutePlanner(const AircraftConfig& ac,
-                                                     const Vec3& goal_xy,
-                                                     double goal_z,
-                                                     double goal_heading_rad,
-                                                     double meeting_speed_mps,
-                                                     double turn_radius_m,
-                                                     double step_m) {
+std::vector<WaypointXYZ> PlanTransferWithRoutePlanner(
+    const AircraftConfig& ac,
+    const Vec3& goal_xy,
+    double goal_z,
+    double goal_heading_rad,
+    double meeting_speed_mps,
+    double turn_radius_m,
+    double step_m,
+    const std::vector<std::vector<routeplan::Vec2>>& obstacles_world) {
   const routeplan::Pose3D start{
       ac.initial_position_xy.x,
       ac.initial_position_xy.y,
       ac.initial_position_lla.alt_m,
-      Deg2Rad(ac.current_status.heading_deg)};
+      NavHeadingDegToMathRad(ac.current_status.heading_deg)};
 
-  const routeplan::Pose3D goal{goal_xy.x, goal_xy.y, goal_z, goal_heading_rad};
+  const routeplan::Pose3D goal{goal_xy.x, goal_xy.y, goal_z, NormalizeRad(goal_heading_rad)};
 
   routeplan::PlannerConfig cfg;
   cfg.turnRadius = ClampMin(turn_radius_m, 10.0);
@@ -223,8 +263,7 @@ std::vector<WaypointXYZ> PlanTransferWithRoutePlanner(const AircraftConfig& ac,
 
   cfg.allowSplineFallback = true;
 
-  const std::vector<std::vector<routeplan::Vec2>> no_obstacles;
-  const routeplan::PlanResult res = routeplan::PlanRoute(start, goal, no_obstacles, cfg);
+  const routeplan::PlanResult res = routeplan::PlanRoute(start, goal, obstacles_world, cfg);
 
   std::vector<WaypointXYZ> out;
   if (!res.route.empty()) {
@@ -266,6 +305,9 @@ void PathPlanningStage::Run(PlanningContext& ctx) {
   const double step_transfer = std::clamp(turn_radius * 0.20, 200.0, 2000.0);
   const double step_loop = std::clamp(turn_radius * 0.10, 100.0, 1500.0);
 
+  // Route planner obstacles in XY (meters), converted from mission no-fly zones.
+  const auto obstacles_world = BuildNoFlyObstaclePolygons(ctx);
+
   // =========================
   // 1) Tanker trajectory
   // =========================
@@ -285,8 +327,10 @@ void PathPlanningStage::Run(PlanningContext& ctx) {
     // Generate racetrack loop at tanker meeting altitude.
     const std::vector<WaypointXYZ> loop_raw = GenerateRacetrackLoop(ctx.racetrack, turn_dir, tanker_meet_z, step_loop);
 
-    // Goal heading (radians) for transfer: use provided entry direction if available; otherwise infer from racetrack tangent.
-    double goal_heading_rad = Deg2Rad(ctx.rendezvous.tanker_entry_direction_deg);
+    // Goal heading for transfer.
+    // rendezvous.tanker_entry_direction_deg follows nav convention (0°=North, CW positive),
+    // while route planner uses math convention (0°=+X/East, CCW positive).
+    double goal_heading_rad = NavHeadingDegToMathRad(ctx.rendezvous.tanker_entry_direction_deg);
     if (std::fabs(ctx.rendezvous.tanker_entry_direction_deg) < 1e-9 && !loop_raw.empty()) {
       const std::size_t idx = FindClosestIndex(loop_raw, entry.x, entry.y);
       goal_heading_rad = HeadingAtIndexRad(loop_raw, idx);
@@ -300,7 +344,14 @@ void PathPlanningStage::Run(PlanningContext& ctx) {
       AppendPoint(t, {ctx.tanker.initial_position_xy.x, ctx.tanker.initial_position_xy.y, tanker_meet_z});
     } else {
       const auto transfer = PlanTransferWithRoutePlanner(
-          ctx.tanker, entry, tanker_meet_z, goal_heading_rad, ctx.rendezvous.tanker_meeting_speed_mps, turn_radius, step_transfer);
+          ctx.tanker,
+          entry,
+          tanker_meet_z,
+          goal_heading_rad,
+          ctx.rendezvous.tanker_meeting_speed_mps,
+          turn_radius,
+          step_transfer,
+          obstacles_world);
       AppendPoints(t, transfer);
     }
 
@@ -355,7 +406,14 @@ void PathPlanningStage::Run(PlanningContext& ctx) {
 
     // Transfer: initial -> waiting
     const auto transfer = PlanTransferWithRoutePlanner(
-        r, waiting, meet_z, waiting_heading_rad, rr.meeting_speed_mps, turn_radius, step_transfer);
+        r,
+        waiting,
+        meet_z,
+        waiting_heading_rad,
+        rr.meeting_speed_mps,
+        turn_radius,
+        step_transfer,
+        obstacles_world);
     AppendPoints(t, transfer);
 
     // Waiting loops: cycling_number laps on racetrack (starting near waiting point).

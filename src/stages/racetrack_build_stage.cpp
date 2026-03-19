@@ -132,6 +132,34 @@ static void FillSafePolygon(const Poly& poly, std::vector<racetrack::Vec2>& out)
   }
 }
 
+static racetrack::Vec2 LLA2XY_3857(const refuel::LLA& lla) {
+  constexpr double kEarthRadiusM = 6378137.0;
+  const double lat = lla.lat_deg * kPI / 180.0;
+  const double lon = lla.lon_deg * kPI / 180.0;
+  return racetrack::Vec2{
+      kEarthRadiusM * lon,
+      kEarthRadiusM * std::log(std::tan(kPI / 4.0 + lat / 2.0))};
+}
+
+template <class Ctx>
+static void FillNoFlyPolygons(const Ctx& ctx, std::vector<std::vector<racetrack::Vec2>>& out) {
+  out.clear();
+
+  const auto& nf = ctx.mission.operation_area.no_fly_zones;
+  if (!nf.is_defined) return;
+
+  out.reserve(nf.zones_vertices_lla.size());
+  for (const auto& poly_lla : nf.zones_vertices_lla) {
+    if (poly_lla.size() < 3) continue;
+    std::vector<racetrack::Vec2> poly_xy;
+    poly_xy.reserve(poly_lla.size());
+    for (const auto& p : poly_lla) {
+      poly_xy.push_back(LLA2XY_3857(p));
+    }
+    if (poly_xy.size() >= 3) out.push_back(std::move(poly_xy));
+  }
+}
+
 // ---------- Altitude/Speed extraction (compile-safe, falls back if fields differ) ----------
 // ---------- altitude/speed extraction (based on ctx, not mission) ----------
 // NOTE:
@@ -491,6 +519,9 @@ void refuel::RacetrackBuildStage::Run(refuel::PlanningContext& ctx) {
 
   // Safe polygon (guaranteed non-empty per you)
   FillSafePolygon(ctx.safe_zone_selected.safe_zone_polygon_xy, in.safe_polygon);
+
+  // Optional no-fly polygons (converted from mission LLA)
+  FillNoFlyPolygons(ctx, in.no_fly_polygons);
 
   // Tanker & receivers positions
   in.tanker = ToRTVec2(ctx.tanker.initial_position_xy);

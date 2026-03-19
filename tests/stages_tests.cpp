@@ -252,8 +252,8 @@ bool Test_CoordinateTransformStage_Basic() {
   // CoordinateTransformStage 会把输入的高度写入 xy.z（便于后续阶段直接引用高度）。
   REFUEL_EXPECT_NEAR(ctx.tanker.initial_position_xy.z, 5000.0, 1e-9);
 
-  // Stage uses R = 6371000.0
-  const double R = 6371000.0;
+  // Stage uses R = 6378137.0
+  const double R = 6378137.0;
   const double expect_r1_x = R * Deg2Rad(0.01);
   std::cout << "Expected receiver[0].x ~= R*deg2rad(0.01) = " << expect_r1_x << "\n";
   REFUEL_EXPECT_NEAR(ctx.receivers[0].initial_position_xy.x, expect_r1_x, 1e-3);
@@ -783,8 +783,7 @@ bool Test_CostStage_PopulatesMapsAndTotals() {
 bool Test_Pipeline_EndToEnd_Smoke() {
   // 端到端冒烟测试：确保 Pipeline 能把最小输入跑完并产生关键输出。
   //
-  // 注意：当前 skeleton 的 CoordinateTransformStage 使用 R=6371000，
-  // SafeZoneSelectStage 使用 R=6378137。二者略有不一致会带来小尺度误差。
+  // 注意：CoordinateTransformStage 与 SafeZoneSelectStage 现统一使用 R=6378137。
   // 本测试只检查“结构性输出”（非空、有限、尺寸合理），避免对数值过拟合。
   refuel::PlanningContext ctx;
 

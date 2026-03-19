@@ -36,6 +36,10 @@ struct Inputs {
   // Initial track params from your empirical formula (meters)
   double L0 = 0.0; // straight segment length
   double R0 = 0.0; // semicircle radius
+
+  // Optional no-fly polygons (meters, x=east, y=north).
+  // Any feasible racetrack must avoid intersecting these polygons.
+  std::vector<std::vector<Vec2>> no_fly_polygons;
 };
 
 struct Outputs {

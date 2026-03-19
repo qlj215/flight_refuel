@@ -119,7 +119,14 @@ void ParseNoFlyZoneCollection(const json& zones_json,
   out_no_fly.zone_ids.clear();
   out_no_fly.zones_vertices_lla.clear();
   if (!zones_json.is_object()) return;
-  out_no_fly.is_defined = zones_json.value("is_defined", false);
+
+  // Support both explicit and implicit no-fly definitions:
+  // some mission files provide vertices/zones without is_defined=true.
+  const bool has_zone_payload =
+      (zones_json.contains("zones") && zones_json["zones"].is_array()) ||
+      (zones_json.contains("no_fly_zones_vertices") && zones_json["no_fly_zones_vertices"].is_array()) ||
+      zones_json.contains("vertices");
+  out_no_fly.is_defined = zones_json.value("is_defined", has_zone_payload);
   if (!out_no_fly.is_defined) return;
 
   auto push_zone = [&](int default_id, const json& zone_obj, const json& vertices_json) {

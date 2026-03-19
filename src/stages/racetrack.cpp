@@ -364,6 +364,71 @@ static bool stadium_inside_poly(const std::vector<Vec2>& poly, const Stadium& st
   return true;
 }
 
+static bool capsule_intersects_poly(const Seg& centerline,
+                                    double radius_m,
+                                    const std::vector<Vec2>& poly,
+                                    double eps_m){
+  if (poly.size() < 3) return false;
+
+  // 1) Polygon edge enters capsule band around centerline
+  const int n = static_cast<int>(poly.size());
+  for (int i = 0; i < n; ++i) {
+    Seg e{poly[i], poly[(i + 1) % n]};
+    if (dist_seg_seg(centerline, e) <= radius_m + eps_m) return true;
+  }
+
+  // 2) Any polygon vertex lies inside capsule
+  for (const auto& v : poly) {
+    if (dist_point_seg(v, centerline) <= radius_m + eps_m) return true;
+  }
+
+  // 3) Capsule middle lies inside polygon
+  const Vec2 mid = (centerline.a + centerline.b) * 0.5;
+  if (point_in_poly(poly, mid)) return true;
+
+  // 4) Sample capsule boundary (both end-circles + side offsets)
+  Vec2 u = centerline.b - centerline.a;
+  const double L = norm(u);
+  if (L > EPS) {
+    u = u * (1.0 / L);
+    const Vec2 v{-u.y, u.x};
+
+    constexpr int kLineSamples = 16;
+    for (int i = 0; i <= kLineSamples; ++i) {
+      const double t = static_cast<double>(i) / static_cast<double>(kLineSamples);
+      const Vec2 c = centerline.a + u * (L * t);
+      if (point_in_poly(poly, c + v * radius_m)) return true;
+      if (point_in_poly(poly, c - v * radius_m)) return true;
+    }
+
+    constexpr int kArcSamples = 24;
+    for (int i = 0; i < kArcSamples; ++i) {
+      const double ang = 2.0 * PI * static_cast<double>(i) / static_cast<double>(kArcSamples);
+      const Vec2 off{std::cos(ang) * radius_m, std::sin(ang) * radius_m};
+      if (point_in_poly(poly, centerline.a + off)) return true;
+      if (point_in_poly(poly, centerline.b + off)) return true;
+    }
+  }
+
+  return false;
+}
+
+static bool stadium_clear_of_no_fly(const Stadium& st,
+                                    const std::vector<std::vector<Vec2>>& no_fly_polygons,
+                                    double eps_m) {
+  if (no_fly_polygons.empty()) return true;
+
+  Vec2 u{std::cos(st.theta), std::sin(st.theta)};
+  const Vec2 A = st.C - u * (st.L / 2.0);
+  const Vec2 B = st.C + u * (st.L / 2.0);
+  const Seg AB{A, B};
+
+  for (const auto& poly : no_fly_polygons) {
+    if (capsule_intersects_poly(AB, st.R, poly, eps_m)) return false;
+  }
+  return true;
+}
+
 static Vec2 avg_point(const std::vector<Vec2>& pts){
   if(pts.empty()) return {0,0};
   Vec2 s{0,0};
@@ -517,7 +582,8 @@ Result PlanRacetrack(const Inputs& in, const Config& cfg){
     for(auto &pp : cand){
       Vec2 C = rectLocalToWorld(pp.first, pp.second);
       Stadium st{L, R, C, theta};
-      if(stadium_inside_poly(poly, st, cfg.contain_eps_m)){
+      if(stadium_inside_poly(poly, st, cfg.contain_eps_m) &&
+         stadium_clear_of_no_fly(st, in.no_fly_polygons, cfg.contain_eps_m)){
         feasible.push_back(st);
       }
     }
@@ -551,7 +617,7 @@ Result PlanRacetrack(const Inputs& in, const Config& cfg){
 
   if(!found){
     res.status = Status::NoFeasibleSolution;
-    res.message = "No feasible racetrack found under current L/R and constraints.";
+    res.message = "No feasible racetrack found under current L/R, safe-zone and no-fly constraints.";
     return res;
   }
 
