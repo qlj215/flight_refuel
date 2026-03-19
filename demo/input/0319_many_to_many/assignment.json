@@ -1,0 +1,83 @@
+{
+  "Receivers": [
+    {
+      "id": "RE001",
+      "required_fuel": 2000.0,
+      "priority": 2,
+      "initial_position": [
+        12917500,
+        3144000
+      ]
+    },
+    {
+      "id": "RE002",
+      "required_fuel": 1800.0,
+      "priority": 1,
+      "formation": "A",
+      "formation_role": "Lead",
+      "initial_position": [
+        13000000,
+        3000000
+      ]
+    },
+    {
+      "id": "RE003",
+      "required_fuel": 1600.0,
+      "priority": 1,
+      "formation": "A",
+      "initial_position": [
+        13000100,
+        3000050
+      ]
+    }
+  ],
+  "Tankers": [
+    {
+      "id": "TK001",
+      "current_fuel": 6900.0,
+      "max_fuel": 12000.0,
+      "available": true,
+      "initial_position": [
+        13330000,
+        3246000
+      ],
+      "missions_count": 3,
+      "fuel_transferred": 5100.0
+    },
+    {
+      "id": "TK002",
+      "current_fuel": 7700.0,
+      "max_fuel": 11000.0,
+      "available": true,
+      "initial_position": [
+        13335000,
+        3245000
+      ],
+      "missions_count": 2,
+      "fuel_transferred": 3300.0
+    }
+  ],
+  "assignments": [
+    {
+      "formation": "Alpha",
+      "assigned_to": "TankerRE001"
+    },
+    {
+      "formation": "Bravo",
+      "assigned_to": "TankerRE002"
+    },
+    {
+      "tanker": "TK001",
+      "assigned_events": [
+        "RE002",
+        "RE003"
+      ]
+    },
+    {
+      "tanker": "TK002",
+      "assigned_events": [
+        "RE001"
+      ]
+    }
+  ]
+}
