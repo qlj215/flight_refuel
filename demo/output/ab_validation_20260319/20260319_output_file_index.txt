@@ -1,0 +1,26 @@
+20260319 Unified Output File Index
+
+Total files renamed: 22
+
+0319_many_to_many_ab_report.json -> 20260319_many_to_many_ab_report.json
+0319_many_to_many_ab_visualization.png -> 20260319_many_to_many_ab_visualization.png
+0319_many_to_many_run_A.log -> 20260319_many_to_many_run_A.log
+0319_many_to_many_run_B.log -> 20260319_many_to_many_run_B.log
+ab_obstacle_validation.png -> 20260319_ab_obstacle_validation.png
+metrics.json -> 20260319_ab_obstacle_metrics.json
+runA.log -> 20260319_ab_obstacle_run_A.log
+runB.log -> 20260319_ab_obstacle_run_B.log
+tanker_noobs.csv -> 20260319_ab_obstacle_tanker_noobs.csv
+tanker_obs.csv -> 20260319_ab_obstacle_tanker_obs.csv
+ab_refuel_trajectories_compare.png -> 20260319_ab_refuel_trajectories_compare_v1.png
+ab_refuel_trajectories_zoom.png -> 20260319_ab_refuel_trajectories_zoom_v1.png
+ab_refuel_trajectories_metrics.json -> 20260319_ab_refuel_trajectories_metrics_v1.json
+ab_refuel_trajectories_metrics.txt -> 20260319_ab_refuel_trajectories_metrics_v1.txt
+ab_refuel_trajectories_compare_fix.png -> 20260319_ab_refuel_trajectories_compare_v2_fix.png
+ab_refuel_trajectories_zoom_fix.png -> 20260319_ab_refuel_trajectories_zoom_v2_fix.png
+ab_refuel_trajectories_metrics_fix.json -> 20260319_ab_refuel_trajectories_metrics_v2_fix.json
+ab_refuel_trajectories_metrics_fix.txt -> 20260319_ab_refuel_trajectories_metrics_v2_fix.txt
+ab_tanker_receiver_compare.json -> 20260319_ab_tanker_receiver_compare_v1.json
+ab_tanker_receiver_compare.png -> 20260319_ab_tanker_receiver_compare_v1.png
+ab_tanker_receiver_compare_v2.png -> 20260319_ab_tanker_receiver_compare_v2.png
+metrics_fix.json -> 20260319_ab_obstacle_metrics_fix.json

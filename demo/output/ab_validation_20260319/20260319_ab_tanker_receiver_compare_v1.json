@@ -1,0 +1,46 @@
+{
+  "tanker01.csv": {
+    "len_A": 843840.4424157746,
+    "len_B": 867832.6410484063,
+    "delta": 23992.198632631684,
+    "delta_pct": 2.843215070842779,
+    "same_hash": false,
+    "points_A": 1768,
+    "points_B": 1770,
+    "hash_A": "1e5a76b4377168b52bb035785f64304f",
+    "hash_B": "cb94f99b881ee56553d46392042876bb"
+  },
+  "receiver01.csv": {
+    "len_A": 963416.9782345003,
+    "len_B": 963416.9782345003,
+    "delta": 0.0,
+    "delta_pct": 0.0,
+    "same_hash": true,
+    "points_A": 1919,
+    "points_B": 1919,
+    "hash_A": "9f119149be79f51ca329c202bdbfda28",
+    "hash_B": "9f119149be79f51ca329c202bdbfda28"
+  },
+  "receiver02.csv": {
+    "len_A": 1091288.0637853574,
+    "len_B": 1091288.0637853574,
+    "delta": 0.0,
+    "delta_pct": 0.0,
+    "same_hash": true,
+    "points_A": 2080,
+    "points_B": 2080,
+    "hash_A": "f8dea36360af0799ea20a8525cd1a795",
+    "hash_B": "f8dea36360af0799ea20a8525cd1a795"
+  },
+  "receiver03.csv": {
+    "len_A": 1084202.452495861,
+    "len_B": 1084202.452495861,
+    "delta": 0.0,
+    "delta_pct": 0.0,
+    "same_hash": true,
+    "points_A": 2072,
+    "points_B": 2072,
+    "hash_A": "3f41cd5c04c6e7e1c3714472ea9cae51",
+    "hash_B": "3f41cd5c04c6e7e1c3714472ea9cae51"
+  }
+}

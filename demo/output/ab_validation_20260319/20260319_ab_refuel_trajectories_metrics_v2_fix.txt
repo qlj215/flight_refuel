@@ -1,0 +1,4 @@
+tanker01: delta=-31373.60m (-3.5554%), inside A/B=281/0, same=False
+receiver01: delta=-27888.11m (-2.6765%), inside A/B=253/0, same=False
+receiver02: delta=-30580.32m (-2.5929%), inside A/B=253/0, same=False
+receiver03: delta=-30642.25m (-2.6133%), inside A/B=253/0, same=False

@@ -1,0 +1,74 @@
+{
+  "input_dir": "demo/input/0319_many_to_many",
+  "safe_zone_count": 2,
+  "no_fly_count": 2,
+  "safe_no_fly_overlap": false,
+  "run_A_log": [
+    "Detected branch: many_to_many",
+    "Done. Many-to-many outputs written to: /tmp/0319_many_to_many_ab/out_A"
+  ],
+  "run_B_log": [
+    "Detected branch: many_to_many",
+    "Done. Many-to-many outputs written to: /tmp/0319_many_to_many_ab/out_B"
+  ],
+  "metrics": [
+    {
+      "path": "1_TK001/receiver01.csv",
+      "lenA": 564290.2469208292,
+      "lenB": 564290.2469208292,
+      "delta": 0.0,
+      "pct": 0.0,
+      "same": true,
+      "pointsA": 994,
+      "pointsB": 994
+    },
+    {
+      "path": "1_TK001/receiver02.csv",
+      "lenA": 564198.1074574847,
+      "lenB": 564198.1074574847,
+      "delta": 0.0,
+      "pct": 0.0,
+      "same": true,
+      "pointsA": 993,
+      "pointsB": 993
+    },
+    {
+      "path": "1_TK001/tanker01.csv",
+      "lenA": 297442.94001944445,
+      "lenB": 395311.59075611626,
+      "delta": 97868.65073667181,
+      "pct": 32.90333626014924,
+      "same": false,
+      "pointsA": 657,
+      "pointsB": 783
+    },
+    {
+      "path": "2_TK002/receiver01.csv",
+      "lenA": 672327.2034750811,
+      "lenB": 672327.2034750811,
+      "delta": 0.0,
+      "pct": 0.0,
+      "same": true,
+      "pointsA": 1129,
+      "pointsB": 1129
+    },
+    {
+      "path": "2_TK002/tanker01.csv",
+      "lenA": 402985.20672575815,
+      "lenB": 402985.20672575815,
+      "delta": 0.0,
+      "pct": 0.0,
+      "same": true,
+      "pointsA": 789,
+      "pointsB": 789
+    }
+  ],
+  "inside_count_B": {
+    "1_TK001/receiver01.csv": 0,
+    "1_TK001/receiver02.csv": 0,
+    "1_TK001/tanker01.csv": 0,
+    "2_TK002/receiver01.csv": 0,
+    "2_TK002/tanker01.csv": 0
+  },
+  "visualization": "/home/qlj/.openclaw/workspace/0319_many_to_many_ab_visualization.png"
+}

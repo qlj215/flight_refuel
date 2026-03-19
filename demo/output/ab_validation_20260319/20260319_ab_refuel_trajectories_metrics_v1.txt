@@ -1,0 +1,5 @@
+A/B per-aircraft metrics:
+tanker01: lenA=843840.44m, lenB=867832.64m, delta=23992.20m (2.843215%), same=False
+receiver01: lenA=963416.98m, lenB=963416.98m, delta=0.00m (0.000000%), same=True
+receiver02: lenA=1091288.06m, lenB=1091288.06m, delta=0.00m (0.000000%), same=True
+receiver03: lenA=1084202.45m, lenB=1084202.45m, delta=0.00m (0.000000%), same=True
