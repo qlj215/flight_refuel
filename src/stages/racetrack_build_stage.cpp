@@ -208,6 +208,8 @@ template <class Mission>
 using op_m_racetrack_speed_flat = decltype(std::declval<const Mission&>().racetrack_speed);
 template <class Mission>
 using op_m_altitude_flat = decltype(std::declval<const Mission&>().altitude);
+template <class Mission>
+using op_m_racecourse_altitude_m = decltype(std::declval<const Mission&>().racecourse.altitude_m);
 
 template <class Mission>
 using op_m_racecourse_entry_angle = decltype(std::declval<const Mission&>().racecourse.entry_angle);
@@ -238,25 +240,50 @@ template <class Ctx>
 static void ExtractAltitudeSpeedFromCtx(const Ctx& ctx, double& altitude_m, double& speed_mps) {
   altitude_m = 7000.0;
   speed_mps  = 130.0;
+  bool mission_altitude_set = false;
+  bool mission_speed_set = false;
 
 // Prefer mission.json racetrack params if refuel::MissionInput stores them.
 // mission1.json example: "racetrack": { "angle": 30, "altitude": 7000, "speed": 130 }
 const auto& ms = ctx.mission;
 
 if constexpr (is_detected_v<decltype(ms), op_m_racetrack_speed>) {
-  if (ms.racetrack.speed > 1e-3) speed_mps = static_cast<double>(ms.racetrack.speed);
+  if (ms.racetrack.speed > 1e-3) {
+    speed_mps = static_cast<double>(ms.racetrack.speed);
+    mission_speed_set = true;
+  }
 } else if constexpr (is_detected_v<decltype(ms), op_m_racetrack_speed_mps>) {
-  if (ms.racetrack.speed_mps > 1e-3) speed_mps = static_cast<double>(ms.racetrack.speed_mps);
+  if (ms.racetrack.speed_mps > 1e-3) {
+    speed_mps = static_cast<double>(ms.racetrack.speed_mps);
+    mission_speed_set = true;
+  }
 } else if constexpr (is_detected_v<decltype(ms), op_m_racetrack_speed_flat>) {
-  if (ms.racetrack_speed > 1e-3) speed_mps = static_cast<double>(ms.racetrack_speed);
+  if (ms.racetrack_speed > 1e-3) {
+    speed_mps = static_cast<double>(ms.racetrack_speed);
+    mission_speed_set = true;
+  }
 }
 
 if constexpr (is_detected_v<decltype(ms), op_m_racetrack_altitude>) {
-  if (ms.racetrack.altitude > 1.0) altitude_m = static_cast<double>(ms.racetrack.altitude);
+  if (ms.racetrack.altitude > 1.0) {
+    altitude_m = static_cast<double>(ms.racetrack.altitude);
+    mission_altitude_set = true;
+  }
 } else if constexpr (is_detected_v<decltype(ms), op_m_racetrack_altitude_m>) {
-  if (ms.racetrack.altitude_m > 1.0) altitude_m = static_cast<double>(ms.racetrack.altitude_m);
+  if (ms.racetrack.altitude_m > 1.0) {
+    altitude_m = static_cast<double>(ms.racetrack.altitude_m);
+    mission_altitude_set = true;
+  }
+} else if constexpr (is_detected_v<decltype(ms), op_m_racecourse_altitude_m>) {
+  if (ms.racecourse.altitude_m > 1.0) {
+    altitude_m = static_cast<double>(ms.racecourse.altitude_m);
+    mission_altitude_set = true;
+  }
 } else if constexpr (is_detected_v<decltype(ms), op_m_altitude_flat>) {
-  if (ms.altitude > 1.0) altitude_m = static_cast<double>(ms.altitude);
+  if (ms.altitude > 1.0) {
+    altitude_m = static_cast<double>(ms.altitude);
+    mission_altitude_set = true;
+  }
 }
 
 
@@ -264,24 +291,24 @@ if constexpr (is_detected_v<decltype(ms), op_m_racetrack_altitude>) {
 
   // speed
   if constexpr (is_detected_v<decltype(tk), op_tk_current_speed>) {
-    if (tk.current_status.speed_mps > 1e-3) {
+    if (!mission_speed_set && tk.current_status.speed_mps > 1e-3) {
       speed_mps = tk.current_status.speed_mps;
     }
   }
   if constexpr (is_detected_v<decltype(tk), op_tk_cruise_speed_levels>) {
-    if (!(tk.cruise_perf.speed_levels.empty()) && speed_mps <= 1e-3) {
+    if (!mission_speed_set && !(tk.cruise_perf.speed_levels.empty()) && speed_mps <= 1e-3) {
       speed_mps = MedianOf(tk.cruise_perf.speed_levels);
     }
   }
 
   // altitude
   if constexpr (is_detected_v<decltype(tk), op_tk_alt_lla>) {
-    if (tk.initial_position_lla.alt_m > 1.0) {
+    if (!mission_altitude_set && tk.initial_position_lla.alt_m > 1.0) {
       altitude_m = tk.initial_position_lla.alt_m;
     }
   }
   if constexpr (is_detected_v<decltype(tk), op_tk_cruise_alt_levels>) {
-    if (!(tk.cruise_perf.altitude_levels.empty()) && altitude_m <= 1.0) {
+    if (!mission_altitude_set && !(tk.cruise_perf.altitude_levels.empty()) && altitude_m <= 1.0) {
       altitude_m = MedianOf(tk.cruise_perf.altitude_levels);
     }
   }
