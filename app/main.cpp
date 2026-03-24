@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <chrono>
 #include <ctime>
 #include <filesystem>
 #include <fstream>
@@ -7,6 +8,8 @@
 #include <set>
 #include <sstream>
 #include <string>
+#include <thread>
+#include <utility>
 #include <vector>
 
 #include <nlohmann/json.hpp>
@@ -170,6 +173,54 @@ void CheckDesignatedDeadline(const PlanningContext& base,
   }
 }
 
+bool WaitAndLoadContextIfNeeded(const std::string& input_dir,
+                                bool enable_wait_scan,
+                                PlanningContext& out_ctx,
+                                int timeout_seconds = 60,
+                                int scan_interval_seconds = 5) {
+  if (!enable_wait_scan) {
+    out_ctx = refuel::io::DemoIO::LoadContext(input_dir);
+    return true;
+  }
+
+  using clock = std::chrono::steady_clock;
+  const auto deadline = clock::now() + std::chrono::seconds(timeout_seconds);
+  std::string last_err;
+
+  while (true) {
+    try {
+      PlanningContext ctx = refuel::io::DemoIO::LoadContext(input_dir);
+
+      const std::size_t expected_tanker_count =
+          ctx.mission.tanker_ids.empty() ? 1 : ctx.mission.tanker_ids.size();
+      const std::size_t expected_receiver_count =
+          ctx.mission.receiver_ids.empty() ? 0 : ctx.mission.receiver_ids.size();
+
+      if (ctx.tankers.size() < expected_tanker_count) {
+        throw std::runtime_error("tanker json count is incomplete");
+      }
+      if (expected_receiver_count > 0 && ctx.receivers.size() < expected_receiver_count) {
+        throw std::runtime_error("receiver json count is incomplete");
+      }
+
+      out_ctx = std::move(ctx);
+      return true;
+    } catch (const std::exception& e) {
+      last_err = e.what();
+    }
+
+    if (clock::now() >= deadline) {
+      std::cerr << "[input-scan] timeout(" << timeout_seconds
+                << "s), stop waiting. Last error: " << last_err << "\n";
+      return false;
+    }
+
+    std::cerr << "[input-scan] input dir not ready, rescan in " << scan_interval_seconds
+              << "s... reason: " << last_err << "\n";
+    std::this_thread::sleep_for(std::chrono::seconds(scan_interval_seconds));
+  }
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
@@ -180,7 +231,11 @@ int main(int argc, char** argv) {
   if (argc >= 3) output_dir = argv[2];
 
   try {
-    PlanningContext base = refuel::io::DemoIO::LoadContext(input_dir);
+    PlanningContext base;
+    const bool enable_wait_scan = (argc >= 3);
+    if (!WaitAndLoadContextIfNeeded(input_dir, enable_wait_scan, base, 60, 5)) {
+      throw std::runtime_error("Input directory is not ready within 60 seconds.");
+    }
 
     std::cout << "Detected branch: " << BranchName(base.mission.branch_kind) << "\n";
 
