@@ -11,6 +11,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include "branches/chuying_branch.hpp"
 #include "io/demo_io.hpp"
 #include "io/output_writer.hpp"
 #include "pipeline/pipeline.hpp"
@@ -182,10 +183,18 @@ int main(int argc, char** argv) {
 
     std::cout << "Detected branch: " << BranchName(base.mission.branch_kind) << "\n";
 
-    if (base.mission.branch_kind == BranchKind::kFollow ||
-        base.mission.branch_kind == BranchKind::kIntercept) {
+    if (base.mission.branch_kind == BranchKind::kFollow) {
       WriteBranchInterfacePlaceholder(base, output_dir);
-      std::cout << "Branch interface written to: " << output_dir << "\n";
+      std::cout << "Follow branch interface written to: " << output_dir << "\n";
+      return 0;
+    }
+
+    if (base.mission.branch_kind == BranchKind::kIntercept) {
+      std::string err;
+      if (!refuel::branch::RunChuyingBranch(base, output_dir, &err)) {
+        throw std::runtime_error("Chuying branch failed: " + err);
+      }
+      std::cout << "Chuying branch output written to: " << output_dir << "\n";
       return 0;
     }
 

@@ -11,6 +11,7 @@ option(REFUEL_BUILD_TESTS "Build unit/integration tests" ON)
 
 add_executable(refuel_demo
     app/main.cpp
+    src/branches/chuying_branch.cpp
     src/pipeline/pipeline.cpp
     src/io/demo_io.cpp
     src/io/output_writer.cpp
