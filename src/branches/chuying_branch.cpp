@@ -621,13 +621,14 @@ bool RunChuyingBranch(const PlanningContext& base,
     root["branch"] = "chuying";
     root["status"] = "ok";
     root["model"] = "0324chuyin-integrated";
-    root["phase_semantics"] = "phase1_*_end is used as airway midpoint";
+    root["phase_semantics"] = "phase in output means airway midpoint";
     root["weights"] = {
         {"time", weights.time},
         {"tanker_fuel", weights.tanker_fuel},
         {"receiver_fuel", weights.receiver_fuel},
     };
     root["results"] = nlohmann::json::array();
+    int success_count = 0;
 
     fs::create_directories(outputDir);
 
@@ -715,44 +716,82 @@ bool RunChuyingBranch(const PlanningContext& base,
       WriteCsv(fs::path(outputDir) / tanker_csv_name, tanker_traj);
       WriteCsv(fs::path(outputDir) / receiver_csv_name, receiver_traj);
 
+      const bool tanker_cuts_in =
+          (best.mode.find("TANKER_CUT_INTO_RECEIVER_ROUTE") != std::string::npos) ||
+          (best.mode == "SEVERE_FIXED_RECEIVER");
+
       nlohmann::json item;
       item["receiver_id"] = r.id;
       item["success"] = 1;
+
+      // 兼容 0324chuyin/output.json 的核心结构
+      item["meeting_point"] = {best.meet.x, best.meet.y};
+      item["meeting_method"] = tanker_cuts_in ? "B" : "A";
+      item["tanker_meeting_params"] = {
+          {"speed", best.tanker_speed_mps},
+          {"altitude", meet_alt},
+      };
+      item["meeting_time"] = best.meet_time_s;
+      item["fuel_consumption"] = {
+          {"tanker", best.tanker_fuel_used_kg},
+          {"receiver", best.receiver_fuel_used_kg},
+      };
+      item["fueling_params"] = {
+          {"speed", best.receiver_speed_mps},
+          {"altitude", meet_alt},
+      };
+
+      // 扩展字段：phase 即航路中间点
+      item["phase"] = {
+          {"phase1_time_s", best.phase1_time_s},
+          {"phase2_time_s", best.phase2_time_s},
+          {"tanker_midpoint", {best.phase1_tanker_end.x, best.phase1_tanker_end.y}},
+          {"receiver_midpoint", {best.phase1_receiver_end.x, best.phase1_receiver_end.y}},
+      };
+
+      // 调试/追踪字段
       item["mode"] = best.mode;
       item["detail"] = best.detail;
       item["objective"] = best.objective;
-
-      item["meet_time_s"] = best.meet_time_s;
-      item["phase1_time_s"] = best.phase1_time_s;
-      item["phase2_time_s"] = best.phase2_time_s;
-
-      item["meeting_point"] = {best.meet.x, best.meet.y};
-      item["meet_altitude_m"] = meet_alt;
-
       item["meet_heading_deg_math"] = NormalizeDeg360(best.meet_heading_math_deg);
       item["meet_heading_deg_nav"] = MathToNavDeg(best.meet_heading_math_deg);
-
-      item["tanker"] = {
-          {"speed_mps", best.tanker_speed_mps},
-          {"fuel_used_kg", best.tanker_fuel_used_kg},
-          {"phase1_end", {best.phase1_tanker_end.x, best.phase1_tanker_end.y}},
-          {"trajectory_csv", tanker_csv_name},
-      };
-
-      item["receiver"] = {
-          {"speed_mps", best.receiver_speed_mps},
-          {"fuel_used_kg", best.receiver_fuel_used_kg},
-          {"phase1_end", {best.phase1_receiver_end.x, best.phase1_receiver_end.y}},
-          {"trajectory_csv", receiver_csv_name},
-          {"damage_state", damage_state},
-      };
+      item["tanker_csv"] = tanker_csv_name;
+      item["receiver_csv"] = receiver_csv_name;
+      item["receiver_damage_state"] = damage_state;
 
       root["results"].push_back(item);
+      ++success_count;
+    }
+
+    // 单受油机时，主输出与 0324chuyin/output.json 同层级；
+    // 多受油机时保留 results 数组承载多条结果。
+    nlohmann::json final_out;
+    if (ctx.receivers.size() == 1 && root["results"].is_array() && root["results"].size() == 1) {
+      const auto& one = root["results"][0];
+      if (one.value("success", 0) == 1) {
+        final_out = {
+            {"meeting_point", one["meeting_point"]},
+            {"meeting_method", one["meeting_method"]},
+            {"tanker_meeting_params", one["tanker_meeting_params"]},
+            {"meeting_time", one["meeting_time"]},
+            {"fuel_consumption", one["fuel_consumption"]},
+            {"fueling_params", one["fueling_params"]},
+            {"phase", one["phase"]},
+        };
+      } else {
+        final_out = {
+            {"success", 0},
+            {"error", one.value("error", "NO_FEASIBLE_RENDEZVOUS")},
+        };
+      }
+    } else {
+      root["success_count"] = success_count;
+      final_out = root;
     }
 
     std::ofstream ofs(fs::path(outputDir) / "output.json");
     if (!ofs) throw std::runtime_error("Failed to open output.json for writing.");
-    ofs << root.dump(2) << "\n";
+    ofs << final_out.dump(2) << "\n";
 
     return true;
   } catch (const std::exception& e) {
