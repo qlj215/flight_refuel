@@ -12,6 +12,7 @@
 #include <nlohmann/json.hpp>
 
 #include "branches/chuying_branch.hpp"
+#include "branches/suidui_branch.hpp"
 #include "io/demo_io.hpp"
 #include "io/output_writer.hpp"
 #include "pipeline/pipeline.hpp"
@@ -184,8 +185,11 @@ int main(int argc, char** argv) {
     std::cout << "Detected branch: " << BranchName(base.mission.branch_kind) << "\n";
 
     if (base.mission.branch_kind == BranchKind::kFollow) {
-      WriteBranchInterfacePlaceholder(base, output_dir);
-      std::cout << "Follow branch interface written to: " << output_dir << "\n";
+      std::string err;
+      if (!refuel::branch::RunSuiduiBranch(base, output_dir, &err)) {
+        throw std::runtime_error("Suidui branch failed: " + err);
+      }
+      std::cout << "Suidui branch output written to: " << output_dir << "\n";
       return 0;
     }
 

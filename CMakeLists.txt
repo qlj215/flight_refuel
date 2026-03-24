@@ -12,6 +12,7 @@ option(REFUEL_BUILD_TESTS "Build unit/integration tests" ON)
 add_executable(refuel_demo
     app/main.cpp
     src/branches/chuying_branch.cpp
+    src/branches/suidui_branch.cpp
     src/pipeline/pipeline.cpp
     src/io/demo_io.cpp
     src/io/output_writer.cpp
@@ -86,6 +87,23 @@ if(REFUEL_BUILD_TESTS)
   )
   target_include_directories(refuel_chuying_tests PRIVATE include include/common .)
   add_test(NAME refuel_chuying_tests COMMAND refuel_chuying_tests)
+
+  # -------------------------
+  # Suidui branch tests
+  # -------------------------
+  add_executable(refuel_suidui_tests
+      tests/suidui_tests.cpp
+      src/branches/suidui_branch.cpp
+      src/io/demo_io.cpp
+      src/stages/coordinate_transform_stage.cpp
+      src/stages/preprocess_stage.cpp
+      src/stages/safe_zone_select_stage.cpp
+      src/stages/racetrack_build_stage.cpp
+      src/stages/route_planner.cpp
+      src/stages/racetrack.cpp
+  )
+  target_include_directories(refuel_suidui_tests PRIVATE include include/common .)
+  add_test(NAME refuel_suidui_tests COMMAND refuel_suidui_tests)
 
   # -------------------------
   # Many-to-many branch tests
