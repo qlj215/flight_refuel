@@ -60,6 +60,9 @@ struct CurrentStatus {
   double fuel_kg{0.0};
   double heading_deg{0.0};
   double speed_mps{0.0};
+  // 兼容 0324chuyin 输入接口：允许在 current_status 放速度上下界
+  double speed_min_mps{0.0};
+  double speed_max_mps{0.0};
   double max_fuel_kg{0.0}; // 新增：受油机最大载油量（兼容挂在 current_status）
   int priority{0};         // 新增：受油机优先级（1 最高，0 表示未指定）
   std::string timestamp;

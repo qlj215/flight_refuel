@@ -73,6 +73,21 @@ if(REFUEL_BUILD_TESTS)
   add_test(NAME refuel_stage_tests COMMAND refuel_stage_tests)
 
   # -------------------------
+  # Chuying branch tests
+  # -------------------------
+  add_executable(refuel_chuying_tests
+      tests/chuying_tests.cpp
+      src/branches/chuying_branch.cpp
+      src/io/demo_io.cpp
+      src/stages/coordinate_transform_stage.cpp
+      src/stages/preprocess_stage.cpp
+      src/stages/route_planner.cpp
+      src/stages/racetrack.cpp
+  )
+  target_include_directories(refuel_chuying_tests PRIVATE include include/common .)
+  add_test(NAME refuel_chuying_tests COMMAND refuel_chuying_tests)
+
+  # -------------------------
   # Many-to-many branch tests
   # -------------------------
   add_executable(refuel_many_to_many_tests

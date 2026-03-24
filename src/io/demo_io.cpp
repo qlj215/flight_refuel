@@ -204,6 +204,10 @@ AircraftConfig ParseAircraft(const json& root, const std::string& id_key, const 
   ac.current_status.fuel_kg = cs.value("fuel_kg", ac.current_status.fuel_kg);
   ac.current_status.heading_deg = cs.value("heading_deg", ac.current_status.heading_deg);
   ac.current_status.speed_mps = cs.value("speed_mps", ac.current_status.speed_mps);
+  ac.current_status.speed_min_mps =
+      cs.value("speed_min", cs.value("speed_min_mps", ac.current_status.speed_min_mps));
+  ac.current_status.speed_max_mps =
+      cs.value("speed_max", cs.value("speed_max_mps", ac.current_status.speed_max_mps));
   ac.current_status.max_fuel_kg = cs.value("max_fuel_kg", ac.current_status.max_fuel_kg);
   ac.current_status.priority = cs.value("priority", ac.current_status.priority);
   ac.current_status.timestamp = cs.value("timestamp", ac.current_status.timestamp);

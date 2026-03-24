@@ -605,8 +605,15 @@ bool RunChuyingBranch(const PlanningContext& base,
     tanker.height_m = tanker_cfg.initial_position_lla.alt_m;
     tanker.heading_math_deg = NavToMathDeg(tanker_cfg.current_status.heading_deg);
     tanker.speed_cur = ClampPositive(tanker_cfg.current_status.speed_mps, tanker_sb.cruise_speed_mps);
-    tanker.speed_min = ClampPositive(tanker_sb.min_speed_mps, 120.0);
-    tanker.speed_max = std::max(tanker.speed_min + 1.0, ClampPositive(tanker_sb.max_speed_mps, 300.0));
+    const double tanker_min_override = tanker_cfg.current_status.speed_min_mps;
+    const double tanker_max_override = tanker_cfg.current_status.speed_max_mps;
+    tanker.speed_min = (tanker_min_override > 1e-9)
+                           ? tanker_min_override
+                           : ClampPositive(tanker_sb.min_speed_mps, 120.0);
+    tanker.speed_max = (tanker_max_override > 1e-9)
+                           ? tanker_max_override
+                           : std::max(tanker.speed_min + 1.0, ClampPositive(tanker_sb.max_speed_mps, 300.0));
+    if (tanker.speed_max < tanker.speed_min + 1e-9) tanker.speed_max = tanker.speed_min + 1.0;
     tanker.fuel_now_kg = ClampPositive(tanker_cfg.current_status.fuel_kg, 1.0);
     tanker.fuel = {&tanker_cfg.fuel_table.altitude_levels,
                    &tanker_cfg.fuel_table.speed_levels,
@@ -644,8 +651,15 @@ bool RunChuyingBranch(const PlanningContext& base,
       receiver.height_m = r.initial_position_lla.alt_m;
       receiver.heading_math_deg = NavToMathDeg(r.current_status.heading_deg);
       receiver.speed_cur = ClampPositive(r.current_status.speed_mps, rb.cruise_speed_mps);
-      receiver.speed_min = ClampPositive(rb.min_speed_mps, 120.0);
-      receiver.speed_max = std::max(receiver.speed_min + 1.0, ClampPositive(rb.max_speed_mps, 300.0));
+      const double receiver_min_override = r.current_status.speed_min_mps;
+      const double receiver_max_override = r.current_status.speed_max_mps;
+      receiver.speed_min = (receiver_min_override > 1e-9)
+                               ? receiver_min_override
+                               : ClampPositive(rb.min_speed_mps, 120.0);
+      receiver.speed_max = (receiver_max_override > 1e-9)
+                               ? receiver_max_override
+                               : std::max(receiver.speed_min + 1.0, ClampPositive(rb.max_speed_mps, 300.0));
+      if (receiver.speed_max < receiver.speed_min + 1e-9) receiver.speed_max = receiver.speed_min + 1.0;
       receiver.fuel_now_kg = ClampPositive(r.current_status.fuel_kg, 1.0);
       receiver.fuel = {&r.fuel_table.altitude_levels,
                        &r.fuel_table.speed_levels,
