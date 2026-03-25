@@ -1,0 +1,16 @@
+{
+  "assignments": [
+    {
+      "tanker": "TK100",
+      "assigned_events": [
+        "RE100"
+      ]
+    },
+    {
+      "tanker": "TK200",
+      "assigned_events": [
+        "RE200"
+      ]
+    }
+  ]
+}

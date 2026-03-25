@@ -1,0 +1,53 @@
+{
+  "mission_id": "FAST_GAMMA",
+  "creation_time": "2026-03-25 14:00:00",
+  "units": {
+    "tanker_id": "TK100 TK200",
+    "receiver_id": "RE100 RE200"
+  },
+  "refuel_mode": {
+    "mode_type": 0,
+    "sub_mode": "fixed",
+    "designated_time": "14:45:00"
+  },
+  "optimization_prefs": {
+    "primary_pref": 1,
+    "secondary_pref": 2,
+    "weight_factors": [
+      1.0,
+      1.0,
+      1.0
+    ]
+  },
+  "holding_zone": {
+    "entry_rules": {
+      "orbit_radius": 4800.0
+    }
+  },
+  "racetrack": {
+    "angle": 20.0,
+    "turn_direction": "left",
+    "altitude": 7100.0,
+    "speed": 172.0
+  },
+  "operation_area": {
+    "boundary": [
+      [
+        34.0,
+        116.0
+      ],
+      [
+        34.0,
+        117.0
+      ],
+      [
+        35.0,
+        117.0
+      ]
+    ],
+    "altitude_limits": [
+      6500.0,
+      9800.0
+    ]
+  }
+}

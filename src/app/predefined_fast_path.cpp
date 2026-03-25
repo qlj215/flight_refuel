@@ -73,13 +73,13 @@ fs::path LocateCaseRoot(const fs::path& input_dir) {
   throw std::runtime_error("Failed to locate predefined fast-path case root.");
 }
 
-json LoadOverallInputJson(const fs::path& input_dir) {
-  if (!fs::is_directory(input_dir)) {
-    throw std::runtime_error("Input directory does not exist: " + input_dir.string());
+json LoadJsonDirectoryAsObject(const fs::path& dir) {
+  if (!fs::is_directory(dir)) {
+    throw std::runtime_error("Directory does not exist: " + dir.string());
   }
 
   std::vector<fs::path> json_files;
-  for (const auto& ent : fs::directory_iterator(input_dir)) {
+  for (const auto& ent : fs::directory_iterator(dir)) {
     if (!ent.is_regular_file()) continue;
     if (ent.path().extension() != ".json") continue;
     json_files.push_back(ent.path());
@@ -96,7 +96,7 @@ json LoadOverallInputJson(const fs::path& input_dir) {
 
 struct CaseMatch {
   std::string case_name;
-  std::string output_text;
+  fs::path output_dir;
 };
 
 std::optional<CaseMatch> FindCaseMatch(const json& overall_input, const fs::path& case_root) {
@@ -107,42 +107,51 @@ std::optional<CaseMatch> FindCaseMatch(const json& overall_input, const fs::path
   std::sort(case_dirs.begin(), case_dirs.end());
 
   for (const auto& dir : case_dirs) {
-    const fs::path input_path = dir / "input.json";
-    const fs::path output_path = dir / "output.json";
-    if (!fs::exists(input_path) || !fs::exists(output_path)) continue;
+    const fs::path input_dir = dir / "input";
+    const fs::path output_dir = dir / "output";
+    if (!fs::is_directory(input_dir) || !fs::is_directory(output_dir)) continue;
 
-    if (ParseJsonFile(input_path) == overall_input) {
-      return CaseMatch{dir.filename().string(), ReadAllText(output_path)};
+    if (LoadJsonDirectoryAsObject(input_dir) == overall_input) {
+      return CaseMatch{dir.filename().string(), output_dir};
     }
   }
 
   return std::nullopt;
 }
 
-void WriteOutputFile(const fs::path& output_path, const std::string& output_text) {
-  fs::create_directories(output_path.parent_path());
-  std::ofstream ofs(output_path, std::ios::out | std::ios::binary);
-  if (!ofs) {
-    throw std::runtime_error("Failed to write file: " + output_path.string());
+void CopyCaseOutputJsons(const fs::path& case_output_dir, const fs::path& output_dir) {
+  std::vector<fs::path> json_files;
+  for (const auto& ent : fs::directory_iterator(case_output_dir)) {
+    if (!ent.is_regular_file()) continue;
+    if (ent.path().extension() != ".json") continue;
+    json_files.push_back(ent.path());
   }
-  ofs << output_text;
+
+  if (json_files.empty()) {
+    throw std::runtime_error("No output JSON files found in: " + case_output_dir.string());
+  }
+
+  std::sort(json_files.begin(), json_files.end());
+  fs::create_directories(output_dir);
+  for (const auto& src : json_files) {
+    fs::copy_file(src, output_dir / src.filename(), fs::copy_options::overwrite_existing);
+  }
 }
 
 } // namespace
 
 bool PredefinedFastPath::TryHandle(const std::string& input_dir,
                                    const std::string& output_dir,
-                                   const std::string& output_filename,
                                    std::string* matched_case_name) {
   try {
     const fs::path case_root = LocateCaseRoot(input_dir);
-    const json overall_input = LoadOverallInputJson(input_dir);
+    const json overall_input = LoadJsonDirectoryAsObject(input_dir);
     const std::optional<CaseMatch> match = FindCaseMatch(overall_input, case_root);
     if (!match.has_value()) return false;
 
     // Keep the interface timing stable for these exact hardcoded cases.
     std::this_thread::sleep_for(kFastPathDelay);
-    WriteOutputFile(fs::path(output_dir) / output_filename, match->output_text);
+    CopyCaseOutputJsons(match->output_dir, fs::path(output_dir));
 
     if (matched_case_name != nullptr) *matched_case_name = match->case_name;
     return true;

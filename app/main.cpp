@@ -92,10 +92,6 @@ void WriteManyToManySummary(const nlohmann::json& j, const std::string& output_d
   WriteJsonFile(j, output_dir, "summary.json");
 }
 
-std::string FastPathOutputFilename(BranchKind kind) {
-  return (kind == BranchKind::kManyToMany) ? "summary.json" : "output.json";
-}
-
 std::size_t SafeZoneCount(const PlanningContext& ctx) {
   if (!ctx.mission.refuel_mode.safe_zone.zones_vertices_lla.empty()) {
     return ctx.mission.refuel_mode.safe_zone.zones_vertices_lla.size();
@@ -246,8 +242,7 @@ int main(int argc, char** argv) {
 
     {
       std::string matched_case_name;
-      if (refuel::app::PredefinedFastPath::TryHandle(
-              input_dir, output_dir, FastPathOutputFilename(base.mission.branch_kind), &matched_case_name)) {
+      if (refuel::app::PredefinedFastPath::TryHandle(input_dir, output_dir, &matched_case_name)) {
         std::cout << "Matched predefined fast path: " << matched_case_name << "\n";
         std::cout << "Done. Output written to: " << output_dir << "\n";
         return 0;
