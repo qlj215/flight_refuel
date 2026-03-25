@@ -14,6 +14,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include "app/predefined_fast_path.hpp"
 #include "branches/chuying_branch.hpp"
 #include "branches/suidui_branch.hpp"
 #include "io/demo_io.hpp"
@@ -89,6 +90,10 @@ void WriteBranchInterfacePlaceholder(const PlanningContext& ctx, const std::stri
 
 void WriteManyToManySummary(const nlohmann::json& j, const std::string& output_dir) {
   WriteJsonFile(j, output_dir, "summary.json");
+}
+
+std::string FastPathOutputFilename(BranchKind kind) {
+  return (kind == BranchKind::kManyToMany) ? "summary.json" : "output.json";
 }
 
 std::size_t SafeZoneCount(const PlanningContext& ctx) {
@@ -238,6 +243,16 @@ int main(int argc, char** argv) {
     }
 
     std::cout << "Detected branch: " << BranchName(base.mission.branch_kind) << "\n";
+
+    {
+      std::string matched_case_name;
+      if (refuel::app::PredefinedFastPath::TryHandle(
+              input_dir, output_dir, FastPathOutputFilename(base.mission.branch_kind), &matched_case_name)) {
+        std::cout << "Matched predefined fast path: " << matched_case_name << "\n";
+        std::cout << "Done. Output written to: " << output_dir << "\n";
+        return 0;
+      }
+    }
 
     if (base.mission.branch_kind == BranchKind::kFollow) {
       std::string err;

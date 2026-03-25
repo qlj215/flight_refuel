@@ -1,0 +1,107 @@
+{
+  "mission1.json": {
+    "mission_id": "FAST_BETA",
+    "creation_time": "2026-03-25 13:00:00",
+    "units": {
+      "tanker_id": "TK010",
+      "receiver_id": "RE010"
+    },
+    "refuel_mode": {
+      "mode_type": 0,
+      "sub_mode": "fixed",
+      "designated_time": "13:25:00"
+    },
+    "optimization_prefs": {
+      "primary_pref": 2,
+      "secondary_pref": 1,
+      "weight_factors": [
+        2.0,
+        1.0,
+        1.0
+      ]
+    },
+    "holding_zone": {
+      "entry_rules": {
+        "orbit_radius": 4500.0
+      }
+    },
+    "racetrack": {
+      "angle": 35.0,
+      "turn_direction": "right",
+      "altitude": 7200.0,
+      "speed": 168.0
+    },
+    "operation_area": {
+      "boundary": [
+        [
+          32.0,
+          118.0
+        ],
+        [
+          32.0,
+          119.0
+        ],
+        [
+          33.0,
+          119.0
+        ]
+      ],
+      "altitude_limits": [
+        6500.0,
+        9500.0
+      ]
+    }
+  },
+  "receivers01_config.json": {
+    "receiver_id": "RE010",
+    "receiver_type": "RECEIVER",
+    "initial_position": {
+      "latitude": 32.4,
+      "longitude": 118.4,
+      "altitude": 6900.0
+    },
+    "current_status": {
+      "fuel_kg": 4100.0,
+      "heading_deg": 120.0,
+      "speed_mps": 158.0,
+      "speed_min_mps": 138.0,
+      "speed_max_mps": 182.0,
+      "max_fuel_kg": 8100.0,
+      "priority": 1,
+      "timestamp": "2026-03-25 13:00:00"
+    },
+    "performance_limits": {
+      "climb_rate": 8.0,
+      "descent_rate": 8.0,
+      "max_altitude": 11200.0,
+      "max_bank_angle_deg": 28.0,
+      "fuel_transfer_speed": 7.0
+    }
+  },
+  "tankers01_config.json": {
+    "tanker_id": "TK010",
+    "tanker_type": "TANKER",
+    "initial_position": {
+      "latitude": 32.1,
+      "longitude": 118.1,
+      "altitude": 7200.0
+    },
+    "current_status": {
+      "fuel_kg": 11800.0,
+      "heading_deg": 30.0,
+      "speed_mps": 168.0,
+      "speed_min_mps": 148.0,
+      "speed_max_mps": 188.0,
+      "max_fuel_kg": 19800.0,
+      "priority": 1,
+      "timestamp": "2026-03-25 13:00:00"
+    },
+    "performance_limits": {
+      "climb_rate": 10.0,
+      "descent_rate": 10.0,
+      "max_altitude": 12500.0,
+      "max_bank_angle_deg": 24.0,
+      "fuel_transfer_speed": 21.0
+    }
+  }
+}

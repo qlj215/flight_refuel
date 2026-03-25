@@ -1,0 +1,175 @@
+{
+  "assignment.json": {
+    "assignments": [
+      {
+        "tanker": "TK100",
+        "assigned_events": [
+          "RE100"
+        ]
+      },
+      {
+        "tanker": "TK200",
+        "assigned_events": [
+          "RE200"
+        ]
+      }
+    ]
+  },
+  "mission1.json": {
+    "mission_id": "FAST_GAMMA",
+    "creation_time": "2026-03-25 14:00:00",
+    "units": {
+      "tanker_id": "TK100 TK200",
+      "receiver_id": "RE100 RE200"
+    },
+    "refuel_mode": {
+      "mode_type": 0,
+      "sub_mode": "fixed",
+      "designated_time": "14:45:00"
+    },
+    "optimization_prefs": {
+      "primary_pref": 1,
+      "secondary_pref": 2,
+      "weight_factors": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    "holding_zone": {
+      "entry_rules": {
+        "orbit_radius": 4800.0
+      }
+    },
+    "racetrack": {
+      "angle": 20.0,
+      "turn_direction": "left",
+      "altitude": 7100.0,
+      "speed": 172.0
+    },
+    "operation_area": {
+      "boundary": [
+        [
+          34.0,
+          116.0
+        ],
+        [
+          34.0,
+          117.0
+        ],
+        [
+          35.0,
+          117.0
+        ]
+      ],
+      "altitude_limits": [
+        6500.0,
+        9800.0
+      ]
+    }
+  },
+  "receivers01_config.json": {
+    "receiver_id": "RE100",
+    "receiver_type": "RECEIVER",
+    "initial_position": {
+      "latitude": 34.4,
+      "longitude": 116.4,
+      "altitude": 6900.0
+    },
+    "current_status": {
+      "fuel_kg": 4200.0,
+      "heading_deg": 95.0,
+      "speed_mps": 160.0,
+      "speed_min_mps": 145.0,
+      "speed_max_mps": 182.0,
+      "max_fuel_kg": 8300.0,
+      "priority": 2,
+      "timestamp": "2026-03-25 14:00:00"
+    },
+    "performance_limits": {
+      "climb_rate": 9.0,
+      "descent_rate": 9.0,
+      "max_altitude": 11300.0,
+      "max_bank_angle_deg": 29.0,
+      "fuel_transfer_speed": 7.0
+    }
+  },
+  "receivers02_config.json": {
+    "receiver_id": "RE200",
+    "receiver_type": "RECEIVER",
+    "initial_position": {
+      "latitude": 34.5,
+      "longitude": 116.5,
+      "altitude": 6950.0
+    },
+    "current_status": {
+      "fuel_kg": 4300.0,
+      "heading_deg": 105.0,
+      "speed_mps": 162.0,
+      "speed_min_mps": 146.0,
+      "speed_max_mps": 184.0,
+      "max_fuel_kg": 8400.0,
+      "priority": 1,
+      "timestamp": "2026-03-25 14:00:00"
+    },
+    "performance_limits": {
+      "climb_rate": 9.0,
+      "descent_rate": 9.0,
+      "max_altitude": 11350.0,
+      "max_bank_angle_deg": 29.0,
+      "fuel_transfer_speed": 7.0
+    }
+  },
+  "tankers01_config.json": {
+    "tanker_id": "TK100",
+    "tanker_type": "TANKER",
+    "initial_position": {
+      "latitude": 34.1,
+      "longitude": 116.1,
+      "altitude": 7100.0
+    },
+    "current_status": {
+      "fuel_kg": 11900.0,
+      "heading_deg": 40.0,
+      "speed_mps": 172.0,
+      "speed_min_mps": 150.0,
+      "speed_max_mps": 190.0,
+      "max_fuel_kg": 20000.0,
+      "priority": 1,
+      "timestamp": "2026-03-25 14:00:00"
+    },
+    "performance_limits": {
+      "climb_rate": 10.0,
+      "descent_rate": 10.0,
+      "max_altitude": 12600.0,
+      "max_bank_angle_deg": 24.0,
+      "fuel_transfer_speed": 22.0
+    }
+  },
+  "tankers02_config.json": {
+    "tanker_id": "TK200",
+    "tanker_type": "TANKER",
+    "initial_position": {
+      "latitude": 34.2,
+      "longitude": 116.2,
+      "altitude": 7100.0
+    },
+    "current_status": {
+      "fuel_kg": 12100.0,
+      "heading_deg": 50.0,
+      "speed_mps": 171.0,
+      "speed_min_mps": 151.0,
+      "speed_max_mps": 191.0,
+      "max_fuel_kg": 20100.0,
+      "priority": 1,
+      "timestamp": "2026-03-25 14:00:00"
+    },
+    "performance_limits": {
+      "climb_rate": 10.0,
+      "descent_rate": 10.0,
+      "max_altitude": 12650.0,
+      "max_bank_angle_deg": 24.0,
+      "fuel_transfer_speed": 22.0
+    }
+  }
+}

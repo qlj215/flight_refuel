@@ -1,0 +1,25 @@
+{
+  "branch": "many_to_many",
+  "input_dir": "predefined_io_fast_paths/gamma_many_to_many_case",
+  "safe_zone_count": 0,
+  "altitude_policy": "7000->8000->9000(cap)",
+  "subtasks": [
+    {
+      "index": 1,
+      "tanker_id": "TK100",
+      "receiver_ids": [
+        "RE100"
+      ],
+      "output_dir": "1_TK100"
+    },
+    {
+      "index": 2,
+      "tanker_id": "TK200",
+      "receiver_ids": [
+        "RE200"
+      ],
+      "output_dir": "2_TK200"
+    }
+  ],
+  "warnings": []
+}
