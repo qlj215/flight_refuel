@@ -241,6 +241,9 @@ int main(int argc, char** argv) {
     std::cout << "Detected branch: " << BranchName(base.mission.branch_kind) << "\n";
 
     {
+      // TEMPORARY shortcut: if input matches a predefined case, bypass planning and
+      // copy the canned output tree after a fixed delay.
+      // NOTE: remove this block when hardcoded fast-path is no longer needed.
       std::string matched_case_name;
       if (refuel::app::PredefinedFastPath::TryHandle(input_dir, output_dir, &matched_case_name)) {
         std::cout << "Matched predefined fast path: " << matched_case_name << "\n";

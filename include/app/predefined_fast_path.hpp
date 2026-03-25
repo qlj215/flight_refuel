@@ -6,7 +6,8 @@ namespace refuel::app {
 
 class PredefinedFastPath {
 public:
-  // Hardcoded bypass for exact predefined overall-input matches.
+  // TEMPORARY hardcoded bypass for exact predefined overall-input matches.
+  // NOTE: This is intentionally removable; delete this fast-path when no longer needed.
   // Case layout:
   //   predefined_io_fast_paths/<case_name>/input/*.json
   //   predefined_io_fast_paths/<case_name>/output/** (json/csv/...)

@@ -20,6 +20,8 @@ namespace {
 
 using json = nlohmann::json;
 
+// TEMPORARY hardcoded case directory for shortcut output.
+// NOTE: intended to be removed after this phase.
 constexpr char kCaseRootDirName[] = "predefined_io_fast_paths";
 constexpr auto kFastPathDelay = std::chrono::seconds(5);
 
@@ -151,7 +153,7 @@ bool PredefinedFastPath::TryHandle(const std::string& input_dir,
     const std::optional<CaseMatch> match = FindCaseMatch(overall_input, case_root);
     if (!match.has_value()) return false;
 
-    // Keep the interface timing stable for these exact hardcoded cases.
+    // TEMPORARY behavior: preserve a fixed 5s latency for hardcoded cases.
     std::this_thread::sleep_for(kFastPathDelay);
     CopyCaseOutputTree(match->output_dir, fs::path(output_dir));
 
