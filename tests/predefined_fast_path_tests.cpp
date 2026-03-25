@@ -63,22 +63,27 @@ json ReadJson(const fs::path& path) {
   return json::parse(ReadAllText(path));
 }
 
-json LoadJsonDirectoryAsObject(const fs::path& dir) {
-  json root = json::object();
-  if (!fs::is_directory(dir)) return root;
-
+std::vector<fs::path> ListRelativeFilesRecursive(const fs::path& dir) {
   std::vector<fs::path> files;
-  for (const auto& ent : fs::directory_iterator(dir)) {
+  if (!fs::is_directory(dir)) return files;
+
+  for (const auto& ent : fs::recursive_directory_iterator(dir)) {
     if (!ent.is_regular_file()) continue;
-    if (ent.path().extension() != ".json") continue;
-    files.push_back(ent.path());
+    files.push_back(fs::relative(ent.path(), dir));
   }
   std::sort(files.begin(), files.end());
+  return files;
+}
 
-  for (const auto& path : files) {
-    root[path.filename().string()] = ReadJson(path);
+bool DirectoryFilesEqual(const fs::path& lhs, const fs::path& rhs) {
+  const std::vector<fs::path> lhs_files = ListRelativeFilesRecursive(lhs);
+  const std::vector<fs::path> rhs_files = ListRelativeFilesRecursive(rhs);
+  if (lhs_files != rhs_files) return false;
+
+  for (const auto& rel : lhs_files) {
+    if (ReadAllText(lhs / rel) != ReadAllText(rhs / rel)) return false;
   }
-  return root;
+  return true;
 }
 
 void MaterializeCaseInput(const fs::path& input_dir, const fs::path& case_input_dir) {
@@ -123,7 +128,7 @@ bool Test_PredefinedFastPath_MatchesSemanticEquivalentInput() {
   REFUEL_EXPECT_TRUE(elapsed_ms >= 5000);
   REFUEL_EXPECT_TRUE(elapsed_ms < 8000);
 
-  REFUEL_EXPECT_TRUE(LoadJsonDirectoryAsObject(output_dir.path()) == LoadJsonDirectoryAsObject(alpha_output));
+  REFUEL_EXPECT_TRUE(DirectoryFilesEqual(output_dir.path(), alpha_output));
   return true;
 }
 
@@ -147,7 +152,7 @@ bool Test_PredefinedFastPath_UsesSummaryFilenameForManyToMany() {
   REFUEL_EXPECT_TRUE(fs::exists(output_dir.path() / "summary.json"));
   REFUEL_EXPECT_TRUE(!fs::exists(output_dir.path() / "output.json"));
 
-  REFUEL_EXPECT_TRUE(LoadJsonDirectoryAsObject(output_dir.path()) == LoadJsonDirectoryAsObject(gamma_output));
+  REFUEL_EXPECT_TRUE(DirectoryFilesEqual(output_dir.path(), gamma_output));
   return true;
 }
 
@@ -170,7 +175,7 @@ bool Test_PredefinedFastPath_NoMatchDoesNothing() {
       refuel::app::PredefinedFastPath::TryHandle(input_dir.path().string(), output_dir.path().string(), &matched_case_name);
 
   REFUEL_EXPECT_TRUE(!handled);
-  REFUEL_EXPECT_TRUE(LoadJsonDirectoryAsObject(output_dir.path()).empty());
+  REFUEL_EXPECT_TRUE(ListRelativeFilesRecursive(output_dir.path()).empty());
   REFUEL_EXPECT_EQ(matched_case_name, std::string("unexpected"));
   return true;
 }
