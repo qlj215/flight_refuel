@@ -11,7 +11,6 @@ option(REFUEL_BUILD_TESTS "Build unit/integration tests" ON)
 
 add_executable(refuel_demo
     app/main.cpp
-    src/app/predefined_fast_path.cpp
     src/branches/chuying_branch.cpp
     src/branches/suidui_branch.cpp
     src/pipeline/pipeline.cpp
@@ -128,14 +127,4 @@ if(REFUEL_BUILD_TESTS)
   target_include_directories(refuel_many_to_many_tests PRIVATE include include/common .)
   add_test(NAME refuel_many_to_many_tests COMMAND refuel_many_to_many_tests)
 
-  # -------------------------
-  # Predefined fast-path tests
-  # -------------------------
-  add_executable(refuel_predefined_fast_path_tests
-      tests/predefined_fast_path_tests.cpp
-      src/app/predefined_fast_path.cpp
-      src/io/demo_io.cpp
-  )
-  target_include_directories(refuel_predefined_fast_path_tests PRIVATE include include/common .)
-  add_test(NAME refuel_predefined_fast_path_tests COMMAND refuel_predefined_fast_path_tests)
 endif()
